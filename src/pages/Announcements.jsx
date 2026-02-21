@@ -1,5 +1,5 @@
 // Announcements.jsx
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { auth } from "../lib/firebase";
@@ -67,13 +67,35 @@ function top5ByCreatedAtDesc(arr) {
     .slice(0, 5);
 }
 
+const LS_LAST_VISITED_KEY = "announcements:lastVisitedAt"; // NEW
+
 export default function Announcements({ uid, locale }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [lastVisitedAt, setLastVisitedAt] = useState(null); // NEW
+
   const API_BASE =
     import.meta.env.VITE_API_URL ||
     "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+
+  // Load lastVisitedAt from localStorage & immediately stamp this visit // NEW
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(LS_LAST_VISITED_KEY);
+      const parsed = stored ? new Date(stored) : null;
+      setLastVisitedAt(parsed && !isNaN(parsed.getTime()) ? parsed : null);
+    } catch {
+      setLastVisitedAt(null);
+    }
+
+    // Stamp current visit time right away for next time
+    try {
+      localStorage.setItem(LS_LAST_VISITED_KEY, new Date().toISOString());
+    } catch {
+      // ignore storage failures
+    }
+  }, []);
 
   useEffect(() => {
     const source = axios.CancelToken.source();
@@ -175,27 +197,44 @@ export default function Announcements({ uid, locale }) {
         </p>
       )}
 
-      {top5.map((a) => (
-        <motion.div
-          key={stableAnnouncementId(a)}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25 }}
-          className="w-full rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 shadow-soft hover:shadow-md transition"
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h3 className="font-semibold text-base">{a.title}</h3>
-              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {a.content}
-              </p>
+      {top5.map((a) => {
+        const created = safeToDate(a?.createdAt, null);
+        const isNew =
+          created && lastVisitedAt
+            ? created.getTime() > lastVisitedAt.getTime()
+            : false; // NEW
+
+        return (
+          <motion.div
+            key={stableAnnouncementId(a)}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="w-full rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 shadow-soft hover:shadow-md transition"
+          >
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-base">{a.title}</h3>
+                  {isNew && (
+                    <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-medium border border-emerald-200 dark:border-emerald-800">
+                      New
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {a.content}
+                </p>
+              </div>
+              <span className="ml-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                {a?.createdAt
+                  ? safeToLocaleDateString(a.createdAt, locale)
+                  : ""}
+              </span>
             </div>
-            <span className="ml-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-              {a?.createdAt ? safeToLocaleDateString(a.createdAt, locale) : ""}
-            </span>
-          </div>
-        </motion.div>
-      ))}
+          </motion.div>
+        );
+      })}
     </section>
   );
 }
