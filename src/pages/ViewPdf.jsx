@@ -5,18 +5,18 @@ import { Document, Page, pdfjs } from "react-pdf";
 
 // Required to avoid "AnnotationLayer styles not found" warnings
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-// Enable if you want selectable text:
+// Enable if you want selectable text (slower on mobile):
 // import "react-pdf/dist/esm/Page/TextLayer.css";
 
-// PDF.js worker from CDN (works in Android Chrome/WebView)
-// If you need offline, self-host pdf.worker and import its URL instead.
+// PDF.js worker from CDN (works in Android Chrome/WebView).
+// If you need offline, self-host and import its URL instead.
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 export default function ViewPdf({ fileName, onBack }) {
   // fileName is your FULL streaming URL
   const fileUrl = fileName;
 
-  // Slightly larger default on small screens so it doesn't look tiny
+  // Slightly larger default on small screens
   const initialZoom =
     typeof window !== "undefined" && window.innerWidth < 640 ? 120 : 100;
 
@@ -26,7 +26,7 @@ export default function ViewPdf({ fileName, onBack }) {
   const [containerWidth, setContainerWidth] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
-  // Observe the scroll container width (minus padding) for responsive fit
+  // Observe scroll container width (minus padding)
   const roRef = useRef(null);
   const containerRef = useCallback((node) => {
     if (!node) return;
@@ -57,7 +57,7 @@ export default function ViewPdf({ fileName, onBack }) {
   const nextPage = () => setCurrentPage((p) => Math.min(numPages || 1, p + 1));
 
   // Width logic:
-  // - zoom ≤ 100: fit-to-container width (avoids tiny centered block)
+  // - zoom ≤ 100: fit-to-width (avoids tiny centered block)
   // - zoom > 100: exceed container width to enable horizontal scroll
   const computedPageWidth = useMemo(() => {
     if (!containerWidth) return undefined;
@@ -163,11 +163,6 @@ export default function ViewPdf({ fileName, onBack }) {
         }}
         ref={containerRef}
       >
-        {/* CONTENT:
-            - We render ONLY ONE PAGE (currentPage)
-            - Wrapper uses explicit width to grow beyond container at >100% zoom (enables horizontal scroll)
-            - We avoid w-full clamps
-        */}
         <div className="p-4">
           <Document
             file={file}
@@ -182,23 +177,11 @@ export default function ViewPdf({ fileName, onBack }) {
                     {String(loadError)}
                   </div>
                 )}
-                <div className="text-sm text-gray-500">
-                  Can’t see the PDF?{" "}
-                  <a
-                    href={fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[var(--mm-teal)] underline"
-                  >
-                    Open in new tab
-                  </a>
-                </div>
               </div>
             }
           >
             {/* Single page */}
             <div
-              // inline-block allows exceeding container width
               className="inline-block align-top"
               style={{
                 width: computedPageWidth ? `${computedPageWidth}px` : undefined,
@@ -207,36 +190,22 @@ export default function ViewPdf({ fileName, onBack }) {
               <Page
                 pageNumber={currentPage}
                 width={computedPageWidth}
-                renderTextLayer={false} // perf: off unless you need selectable text
-                renderAnnotationLayer={true} // needs AnnotationLayer.css (imported above)
+                renderTextLayer={false} // perf: off unless needed
+                renderAnnotationLayer={true} // needs AnnotationLayer.css (imported)
               />
             </div>
           </Document>
-
-          {/* Fallback link for odd WebViews */}
-          <div className="text-xs text-gray-500 mt-2">
-            Having trouble?{" "}
-            <a
-              href={fileUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--mm-teal)] underline"
-            >
-              Open PDF in a new tab
-            </a>
-          </div>
         </div>
       </motion.div>
 
-      {/* CSS OVERRIDES: Crucial to allow width > container (horizontal scroll) */}
+      {/* CSS OVERRIDES: allow width > container for horizontal scroll */}
       <style jsx global>{`
-        /* Remove width clamps that prevent horizontal overflow when zoomed in */
         .react-pdf__Page {
           max-width: none !important;
         }
         .react-pdf__Page__canvas {
           max-width: none !important;
-          width: 100% !important; /* let the wrapper control width */
+          width: 100% !important; /* the wrapper decides width */
           height: auto !important;
           display: block;
         }
