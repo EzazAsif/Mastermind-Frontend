@@ -10,7 +10,7 @@ export default function Footer() {
         w-full
       "
       style={{
-        paddingBottom: "var(--safe-bottom)", // safe-area for iOS
+        paddingBottom: "var(--safe-bottom)",
         paddingLeft: "16px",
         paddingRight: "16px",
       }}
@@ -36,11 +36,13 @@ export default function Footer() {
           </span>
         </div>
 
-        {/* Right: Contact only */}
+        {/* Right: Contact */}
         <div className="flex items-center sm:justify-end">
           <motion.a
             whileTap={{ scale: 0.95 }}
-            href="#"
+            href="https://ictmastermind.com"
+            target="_blank"
+            rel="noopener noreferrer"
             className="
               bg-teal-500 hover:bg-teal-600
               text-white px-3 py-1.5
