@@ -76,6 +76,17 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
     return () => URL.revokeObjectURL(objectUrl);
   }, [imageFile]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (show) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [show]);
+
   /* =========================
      Helpers
   ========================== */
@@ -246,6 +257,14 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
     ? getPublicUrl(existingQuestion.image)
     : "";
 
+  // Optional: close on overlay click
+  const handleOverlayClick = () => {
+    if (!submitting) setShow(false);
+  };
+
+  // Prevent overlay clicks from closing when clicking inside the card
+  const stopPropagation = (e) => e.stopPropagation();
+
   return (
     <>
       <button
@@ -258,8 +277,17 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
       </button>
 
       {show && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl w-[520px] max-w-[95vw] space-y-4">
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 sm:p-6"
+          onClick={handleOverlayClick}
+        >
+          <div
+            className="bg-white rounded-xl w-full max-w-[520px] max-h-[90vh] overflow-auto space-y-4 p-4 sm:p-6"
+            onClick={stopPropagation}
+            role="dialog"
+            aria-modal="true"
+            aria-label={headerTitle}
+          >
             <h3 className="text-lg font-semibold">{headerTitle}</h3>
 
             {error && (
@@ -275,7 +303,7 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                 rows={4}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                className="w-full border rounded-xl p-2"
+                className="w-full border rounded-xl p-2 resize-y"
               />
             </label>
 
@@ -340,7 +368,7 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                 !imageUrl && (
                   <img
                     src={currentImageUrl}
-                    className="max-h-40 rounded border"
+                    className="max-h-40 w-auto rounded border object-contain"
                     alt="current"
                   />
                 )}
@@ -348,7 +376,7 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
               {preview && (
                 <img
                   src={preview}
-                  className="max-h-40 rounded border"
+                  className="max-h-40 w-auto rounded border object-contain"
                   alt="preview"
                 />
               )}
@@ -356,7 +384,7 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
               {imageUrl && !preview && !imageFile && (
                 <img
                   src={getPublicUrl(imageUrl)}
-                  className="max-h-40 rounded border"
+                  className="max-h-40 w-auto rounded border object-contain"
                   alt="URL preview"
                   onError={(e) => (e.currentTarget.style.display = "none")}
                 />
@@ -388,21 +416,24 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
               )}
             </div>
 
-            <button
-              onClick={saveQuestion}
-              disabled={submitting}
-              className="w-full bg-[var(--mm-teal)] text-white py-2 rounded-xl"
-            >
-              {submitting ? "Saving..." : "Save"}
-            </button>
+            {/* Sticky actions */}
+            <div className="sticky bottom-0 bg-white pt-2">
+              <button
+                onClick={saveQuestion}
+                disabled={submitting}
+                className="w-full bg-[var(--mm-teal)] text-white py-2 rounded-xl"
+              >
+                {submitting ? "Saving..." : "Save"}
+              </button>
 
-            <button
-              onClick={() => setShow(false)}
-              disabled={submitting}
-              className="w-full py-2 border rounded-xl"
-            >
-              Cancel
-            </button>
+              <button
+                onClick={() => setShow(false)}
+                disabled={submitting}
+                className="w-full mt-2 py-2 border rounded-xl"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

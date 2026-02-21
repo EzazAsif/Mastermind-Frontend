@@ -50,7 +50,9 @@ export default function Header({
   const [loadingCount, setLoadingCount] = useState(false);
 
   const API_BASE = useMemo(
-    () => "https://ugliest-hannie-ezaz-307892de.koyeb.app",
+    () =>
+      import.meta.env.VITE_API_URL ||
+      "https://ugliest-hannie-ezaz-307892de.koyeb.app",
     [],
   );
   const mountedRef = useRef(true);
@@ -74,7 +76,22 @@ export default function Header({
       }
 
       try {
-        const res = await axios.get(`${API_BASE}/api/users/${currentUser.uid}`);
+        // Optionally include token for this GET if your backend needs it
+        let headers = {};
+        try {
+          const token = await currentUser.getIdToken();
+          if (token) headers.Authorization = `Bearer ${token}`;
+        } catch {
+          // If backend allows public GET /api/users/:uid, we can ignore token
+        }
+
+        const res = await axios.get(
+          `${API_BASE}/api/users/${currentUser.uid}`,
+          {
+            headers,
+            timeout: 12000,
+          },
+        );
         if (mountedRef.current) {
           setDbUser(res.data || null);
         }
@@ -106,6 +123,7 @@ export default function Header({
           `${API_BASE}/api/announcements/count`,
           {
             params: { after: afterIso },
+            timeout: 12000,
           },
         );
         if (mountedRef.current) {
@@ -138,29 +156,46 @@ export default function Header({
   };
 
   // When user clicks the bell:
-  // 1) Update lastNotified to "now" (if logged in)
-  // 2) Reset the badge count
+  // 1) Update lastNotified to "now" (if logged in) — with token
+  // 2) Reset the badge count optimistically
   // 3) Navigate to announcements (parent handler)
   const handleClickBell = async () => {
     try {
       if (firebaseUser) {
-        await axios.put(
-          `${API_BASE}/api/users/${firebaseUser.uid}/last-notified`,
-          {
-            // Omit body → server uses its serverTimestamp,
-            // or you could pass: lastNotified: new Date().toISOString()
-          },
-        );
-
-        // Optimistically update state & badge
+        // Optimistic update first for snappy UX
+        const nowIso = new Date().toISOString();
         setUnreadCount(0);
-        setDbUser((prev) =>
-          prev ? { ...prev, lastNotified: new Date().toISOString() } : prev,
-        );
+        setDbUser((prev) => (prev ? { ...prev, lastNotified: nowIso } : prev));
+
+        // Send PUT with ID token; add timeout to avoid hanging
+        const token = await firebaseUser.getIdToken();
+        if (token) {
+          await axios.put(
+            `${API_BASE}/api/users/${firebaseUser.uid}/last-notified`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` }, timeout: 12000 },
+          );
+
+          // Optional: re-fetch the user to sync canonical server value
+          try {
+            const fresh = await axios.get(
+              `${API_BASE}/api/users/${firebaseUser.uid}`,
+              { headers: { Authorization: `Bearer ${token}` }, timeout: 12000 },
+            );
+            if (fresh?.data) {
+              setDbUser((prev) => ({ ...(prev || {}), ...fresh.data }));
+            }
+          } catch (e) {
+            // Non-fatal: keep optimistic value
+            console.warn("Refresh DB user after PUT failed:", e?.response ?? e);
+          }
+        } else {
+          console.warn("No ID token available; skipping PUT.");
+        }
       }
     } catch (err) {
-      console.error("Failed to update lastNotified:", err);
-      // Even if this fails, still navigate; badge will update on next render/fetch
+      console.error("Failed to update lastNotified:", err?.response ?? err);
+      // Keep optimistic UX; next refresh/fetch will correct if needed
     } finally {
       onGoAnnouncements?.();
     }
@@ -286,16 +321,22 @@ export default function Header({
                       whileTap={{ scale: 0.97 }}
                       className="rounded-full bg-orange-500 text-white p-2 hover:bg-orange-600 md:px-3 md:py-1.5 md:text-xs"
                       onClick={() => setShowModal(true)}
-                      aria-label="Get Validated"
-                      title="Get Validated"
+                      aria-label="Get Subscribed"
+                      title="Get Subscribed"
                     >
-                      <span className="md:inline hidden">Get Validated</span>
+                      {/* Mobile label */}
+                      <span className="inline md:hidden">Get Subscribed</span>
+                      {/* Desktop label */}
+                      <span className="hidden md:inline">Get Validated</span>
+
+                      {/* Optional icon on desktop */}
                       <svg
-                        className="h-5 w-5 md:hidden"
+                        className="h-5 w-5 ml-1 hidden md:inline"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="1.8"
                         viewBox="0 0 24 24"
+                        aria-hidden="true"
                       >
                         <path
                           strokeLinecap="round"
@@ -395,3 +436,4 @@ export default function Header({
     </>
   );
 }
+``;

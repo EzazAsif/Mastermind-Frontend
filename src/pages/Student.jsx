@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../lib/firebase";
@@ -49,6 +49,16 @@ function safeToDate(input, fallback = new Date(0)) {
 /** Format using locale date safely */
 function safeToLocaleDateString(input) {
   return safeToDate(input, new Date()).toLocaleDateString();
+}
+
+/** Helper: get top 5 items by createdAt desc in a robust way */
+function top5ByCreatedAtDesc(arr) {
+  return (Array.isArray(arr) ? arr.slice() : [])
+    .sort(
+      (a, b) =>
+        safeToDate(b?.createdAt).getTime() - safeToDate(a?.createdAt).getTime(),
+    )
+    .slice(0, 5);
 }
 
 export default function Student({ onOpenAuth, setRoute }) {
@@ -204,6 +214,16 @@ export default function Student({ onOpenAuth, setRoute }) {
     return () => unsubscribe();
   }, []);
 
+  // ✅ UI-level guarantee: always show only 5 items and newest first
+  const top5Notes = useMemo(
+    () => top5ByCreatedAtDesc(latestNotes),
+    [latestNotes],
+  );
+  const top5Announcements = useMemo(
+    () => top5ByCreatedAtDesc(latestAnnouncements),
+    [latestAnnouncements],
+  );
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -264,8 +284,8 @@ export default function Student({ onOpenAuth, setRoute }) {
       >
         <h3 className="font-semibold">Latest Notes</h3>
         <ul className="mt-3 space-y-2 text-sm">
-          {latestNotes.length > 0 ? (
-            latestNotes.map((n) => (
+          {top5Notes.length > 0 ? (
+            top5Notes.map((n) => (
               <li
                 key={
                   n.id ||
@@ -299,8 +319,8 @@ export default function Student({ onOpenAuth, setRoute }) {
       >
         <h3 className="font-semibold">Announcements</h3>
         <ul className="mt-3 space-y-2 text-sm">
-          {latestAnnouncements.length > 0 ? (
-            latestAnnouncements.map((a) => (
+          {top5Announcements.length > 0 ? (
+            top5Announcements.map((a) => (
               <li
                 key={
                   a.id ||

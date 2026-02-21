@@ -15,16 +15,15 @@ function createStableKeyFactory() {
 
   return function getStableKey(note) {
     // 1) Prefer true IDs that come from the backend and won't change
-    if (note._id) return String(note._id);
-    if (note.id) return String(note.id);
-    if (note.fileId) return String(note.fileId);
+    if (note?._id) return String(note._id);
+    if (note?.id) return String(note.id);
+    if (note?.fileId) return String(note.fileId);
 
-    // 2) Composite keys from immutable fields (only if you’re sure they won’t change)
-    // Avoid using createdAt unless guaranteed immutable & consistent across fetches.
-    if (note.fileName && note.originalName) {
+    // 2) Composite keys from immutable fields
+    if (note?.fileName && note?.originalName) {
       return `file:${note.fileName}|orig:${note.originalName}`;
     }
-    if (note.fileName) {
+    if (note?.fileName) {
       return `file:${note.fileName}`;
     }
 
@@ -38,7 +37,39 @@ function createStableKeyFactory() {
 
 const getStableKey = createStableKeyFactory();
 
-export default function Notes({ openPdf }) {
+/** Robust date conversion (supports Firestore Timestamp / {seconds} / string / Date) */
+function safeToDate(input, fallback = new Date(0)) {
+  try {
+    if (!input) return fallback;
+    if (typeof input === "object") {
+      if (typeof input.toDate === "function") {
+        const d = input.toDate();
+        return isNaN(d?.getTime()) ? fallback : d;
+      }
+      if (typeof input.seconds === "number") {
+        const d = new Date(input.seconds * 1000);
+        return isNaN(d.getTime()) ? fallback : d;
+      }
+    }
+    const d = new Date(input);
+    return isNaN(d.getTime()) ? fallback : d;
+  } catch {
+    return fallback;
+  }
+}
+
+function safeToLocaleDateString(input, locale) {
+  try {
+    return safeToDate(input, new Date()).toLocaleDateString(locale);
+  } catch {
+    const d = safeToDate(input, new Date());
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
+  }
+}
+
+export default function Notes({ openPdf, locale }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,19 +80,34 @@ export default function Notes({ openPdf }) {
 
   // Fetch notes once we know the current firebaseUser (or guest)
   const fetchNotes = useCallback(
-    async (firebaseUser) => {
+    async (firebaseUser, signal) => {
       setLoading(true);
       setError("");
 
       try {
-        // Build URL based on whether we have a logged-in user
-        const url = firebaseUser
-          ? `${baseApi}/api/notes?uid=${encodeURIComponent(firebaseUser.uid)}`
-          : `${baseApi}/api/notes`;
+        const params = new URLSearchParams();
+        // Optional: add a limit if your backend supports it
+        params.set("limit", "30");
 
-        const res = await fetch(url);
+        let headers = {};
+        if (firebaseUser) {
+          params.set("uid", firebaseUser.uid);
+          try {
+            // Attach ID token if your API requires auth for user-specific notes
+            const token = await firebaseUser.getIdToken();
+            if (token) {
+              headers = { Authorization: `Bearer ${token}` };
+            }
+          } catch (e) {
+            console.warn("Failed to get ID token (continuing without):", e);
+          }
+        }
+
+        const url = `${baseApi}/api/notes?${params.toString()}`;
+        const res = await fetch(url, { headers, signal });
+
         if (!res.ok) {
-          let message = "Failed to fetch notes.";
+          let message = `Failed to fetch notes (${res.status})`;
           try {
             const data = await res.json();
             if (data?.message) message = data.message;
@@ -72,6 +118,7 @@ export default function Notes({ openPdf }) {
         const data = await res.json();
         setNotes(Array.isArray(data) ? data : []);
       } catch (e) {
+        if (e.name === "AbortError") return; // cancelled
         console.error("Notes fetch error:", e);
         setError(e.message || "Something went wrong.");
         setNotes([]);
@@ -82,18 +129,20 @@ export default function Notes({ openPdf }) {
     [baseApi],
   );
 
+  // Avoid Strict Mode double-run races with AbortController
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
+    const { signal } = controller;
+
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
-      if (cancelled) return;
       // Let the API decide visibility:
-      // - validated user -> all notes
+      // - validated user -> user notes
       // - not validated/guest -> public notes
-      fetchNotes(firebaseUser);
+      fetchNotes(firebaseUser, signal);
     });
 
     return () => {
-      cancelled = true;
+      controller.abort();
       try {
         unsub && unsub();
       } catch {}
@@ -118,33 +167,41 @@ export default function Notes({ openPdf }) {
       <h2 className="text-xl lg:text-2xl font-semibold">My Notes</h2>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {normalizedNotes.map((note) => (
-          <motion.div
-            key={note.stableKey} // ✅ stable key
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-            className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 shadow-soft hover:shadow-lg transition cursor-pointer group"
-            onClick={() => openPdf(note.downloadURL)}
-          >
-            <div className="flex items-start justify-between">
-              <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
-                📄
+        {normalizedNotes.map((note) => {
+          const hasUrl = !!note.downloadURL;
+          return (
+            <motion.div
+              key={note.stableKey}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25 }}
+              className={`rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 shadow-soft transition group ${
+                hasUrl
+                  ? "hover:shadow-lg cursor-pointer"
+                  : "opacity-80 cursor-not-allowed"
+              }`}
+              onClick={() => hasUrl && openPdf && openPdf(note.downloadURL)}
+              title={hasUrl ? "Open PDF" : "No file URL available"}
+            >
+              <div className="flex items-start justify-between">
+                <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
+                  📄
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {note.isPublic ? "🌍 Public" : "🔒 Private"}
+                </div>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
-                {note.isPublic ? "🌍 Public" : "🔒 Private"}
-              </div>
-            </div>
 
-            <h3 className="mt-4 font-medium text-sm lg:text-base group-hover:text-[var(--mm-teal)] transition">
-              {note.noteName || note.originalName}
-            </h3>
+              <h3 className="mt-4 font-medium text-sm lg:text-base group-hover:text-[var(--mm-teal)] transition">
+                {note.noteName || note.originalName || "Untitled"}
+              </h3>
 
-            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-              Uploaded on {new Date(note.createdAt).toLocaleDateString()}
-            </p>
-          </motion.div>
-        ))}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                Uploaded on {safeToLocaleDateString(note.createdAt, locale)}
+              </p>
+            </motion.div>
+          );
+        })}
       </div>
     </section>
   );
