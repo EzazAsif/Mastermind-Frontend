@@ -1,14 +1,38 @@
 import { useState } from "react";
 
+function Spinner({ className = "w-5 h-5 text-white" }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  );
+}
+
 export default function UploadPdf({ user }) {
-  // user: optional, can pass Firebase UID for uploadedBy
   const [file, setFile] = useState(null);
   const [noteName, setNoteName] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Handle file selection
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
     if (selected && selected.type === "application/pdf") {
@@ -20,7 +44,6 @@ export default function UploadPdf({ user }) {
     }
   };
 
-  // Handle upload to backend
   const handleUpload = async () => {
     if (!file) return setMessage("No file selected.");
     if (!noteName.trim()) return setMessage("Please enter a note name.");
@@ -67,17 +90,21 @@ export default function UploadPdf({ user }) {
           value={noteName}
           onChange={(e) => setNoteName(e.target.value)}
           placeholder="Enter note name"
-          className="w-full px-3 py-2 border rounded-xl border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--mm-teal)]"
+          disabled={loading}
+          className="w-full px-3 py-2 border rounded-xl border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--mm-teal)] disabled:opacity-60"
         />
       </div>
 
       {/* Upload Box */}
-      <label className="cursor-pointer block w-full max-w-xs mx-auto">
+      <label
+        className={`cursor-pointer block w-full max-w-xs mx-auto ${loading ? "pointer-events-none opacity-60" : ""}`}
+      >
         <input
           type="file"
           accept="application/pdf"
           onChange={handleFileChange}
           className="hidden"
+          disabled={loading}
         />
         <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-xl h-40 bg-gray-50 dark:bg-gray-900 hover:border-[var(--mm-teal)] transition relative">
           {!file ? (
@@ -104,6 +131,7 @@ export default function UploadPdf({ user }) {
           id="publicPdf"
           checked={isPublic}
           onChange={(e) => setIsPublic(e.target.checked)}
+          disabled={loading}
           className="w-4 h-4 accent-[var(--mm-teal)]"
         />
         <label
@@ -117,7 +145,9 @@ export default function UploadPdf({ user }) {
       {/* Message */}
       {message && (
         <p
-          className={`text-sm text-center ${message.includes("successfully") ? "text-green-500" : "text-red-500"}`}
+          className={`text-sm text-center ${
+            message.includes("successfully") ? "text-green-500" : "text-red-500"
+          }`}
         >
           {message}
         </p>
@@ -128,11 +158,19 @@ export default function UploadPdf({ user }) {
         <button
           onClick={handleUpload}
           disabled={loading}
-          className="rounded-xl bg-[var(--mm-teal)] text-white py-2 px-6 font-medium shadow hover:bg-[var(--mm-teal-dark)] transition disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-xl bg-[var(--mm-teal)] text-white py-2 px-6 font-medium shadow hover:bg-[var(--mm-teal-dark)] transition disabled:opacity-60"
         >
-          {loading ? "Uploading..." : "Upload"}
+          {loading ? (
+            <>
+              <Spinner />
+              Uploading...
+            </>
+          ) : (
+            "Upload"
+          )}
         </button>
       </div>
     </div>
   );
 }
+``;

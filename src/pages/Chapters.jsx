@@ -64,6 +64,61 @@ function normalizeChapter(ch) {
 }
 
 /* =========================
+   REUSABLE CONFIRM DIALOG (with loading)
+========================= */
+function ConfirmDialog({
+  open,
+  title = "Confirm",
+  message = "Are you sure?",
+  confirmText = "Delete",
+  cancelText = "Cancel",
+  loading = false,
+  onConfirm,
+  onCancel,
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div
+        className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-[420px] max-w-[92vw] shadow-xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+      >
+        <h3 id="confirm-title" className="text-lg font-semibold mb-2">
+          {title}
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-5 whitespace-pre-line">
+          {message}
+        </p>
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 border rounded-xl disabled:opacity-50"
+            disabled={loading}
+          >
+            {cancelText}
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 bg-red-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            disabled={loading}
+          >
+            {loading && (
+              <span
+                className="inline-block h-4 w-4 rounded-full border-2 border-white/70 border-t-transparent animate-spin"
+                aria-hidden
+              />
+            )}
+            {loading ? "Deleting..." : confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =========================
    COMPONENT
 ========================= */
 export default function Chapters() {
@@ -73,6 +128,15 @@ export default function Chapters() {
   const [editingChapter, setEditingChapter] = useState(null);
   const [chapterTitle, setChapterTitle] = useState("");
   const [questionPercentage, setQuestionPercentage] = useState("");
+
+  // Confirmation modal state
+  const [confirmState, setConfirmState] = useState(
+    /** @type {null | { type: 'chapter'|'question', id: string, name?: string }} */ (
+      null
+    ),
+  );
+  // New: loading for delete action
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   /* =========================
      FETCH CHAPTERS
@@ -127,7 +191,6 @@ export default function Chapters() {
           },
         ).then((res) => res.json());
 
-        // Normalize in case backend returns only _id (or only id)
         const normalized = normalizeChapter(updatedChapter);
 
         setChapters((prev) =>
@@ -167,7 +230,9 @@ export default function Chapters() {
     try {
       await fetch(
         `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${id}`,
-        { method: "DELETE" },
+        {
+          method: "DELETE",
+        },
       );
       setChapters((prev) => prev.filter((c) => c.id !== id));
       if (selectedChapter?.id === id) setSelectedChapter(null);
@@ -200,6 +265,48 @@ export default function Chapters() {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  /* =========================
+     CONFIRMATION HELPERS
+  ========================== */
+
+  // Opens confirmation for either chapter or question delete
+  const openConfirmDelete = (type, data) => {
+    if (type === "chapter") {
+      const { id, title } = data || {};
+      setConfirmState({ type: "chapter", id, name: title || "this chapter" });
+    } else if (type === "question") {
+      const { id, text } = data || {};
+      // Use first 60 chars of text for the label
+      const name = text
+        ? text.length > 60
+          ? text.slice(0, 57) + "..."
+          : text
+        : "this question";
+      setConfirmState({ type: "question", id, name });
+    }
+  };
+
+  // Executes the actual delete after confirmation
+  const handleConfirm = async () => {
+    if (!confirmState) return;
+    setConfirmLoading(true);
+    try {
+      if (confirmState.type === "chapter") {
+        await deleteChapter(confirmState.id);
+      } else if (confirmState.type === "question") {
+        await deleteQuestion(confirmState.id);
+      }
+    } finally {
+      setConfirmLoading(false);
+      setConfirmState(null);
+    }
+  };
+
+  const handleCancel = () => {
+    if (confirmLoading) return; // prevent cancel while loading
+    setConfirmState(null);
   };
 
   /* =========================
@@ -249,7 +356,6 @@ export default function Chapters() {
       });
     }
 
-    // Keep DB order; if you want, sort grouped here.
     return grouped;
   }, [selectedChapter]);
 
@@ -278,9 +384,16 @@ export default function Chapters() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {chapters.map((chapter) => (
           <div
-            key={stableChapterId(chapter)} // ✅ stable key
-            className="p-5 rounded-2xl bg-white dark:bg-gray-900 shadow"
+            key={stableChapterId(chapter)}
+            className="p-5 rounded-2xl bg-white dark:bg-gray-900 shadow relative"
           >
+            {/* (Optional) show a subtle spinner if this specific chapter is being deleted */}
+            {/* {confirmLoading && confirmState?.type === 'chapter' && confirmState?.id === chapter.id && (
+              <div className="absolute top-3 right-3">
+                <span className="inline-block h-4 w-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+              </div>
+            )} */}
+
             <div
               onClick={() => setSelectedChapter(chapter)}
               className="cursor-pointer"
@@ -310,7 +423,12 @@ export default function Chapters() {
               </button>
 
               <button
-                onClick={() => deleteChapter(chapter.id)}
+                onClick={() =>
+                  openConfirmDelete("chapter", {
+                    id: chapter.id,
+                    title: chapter.title,
+                  })
+                }
                 className="px-3 py-1 bg-red-500 text-white rounded-lg"
               >
                 Delete
@@ -343,7 +461,7 @@ export default function Chapters() {
                 setChapters((prev) =>
                   prev.map((c) => (c.id === resolved.id ? resolved : c)),
                 );
-                await fetchChapters(); // ensure sync
+                await fetchChapters();
               }}
             />
 
@@ -372,7 +490,7 @@ export default function Chapters() {
 
                   return (
                     <div
-                      key={block.key} // ✅ stable block key
+                      key={block.key}
                       className="rounded-2xl border border-gray-200 dark:border-gray-700"
                     >
                       {/* Block header */}
@@ -394,13 +512,25 @@ export default function Chapters() {
                           const resolvedImage = q.image
                             ? getPublicUrl(q.image)
                             : "";
-                          const qKey = stableQuestionId(q); // ✅ stable per-question key
+                          const qKey = stableQuestionId(q);
+
+                          const questionBeingDeleted =
+                            confirmLoading &&
+                            confirmState?.type === "question" &&
+                            confirmState?.id === q.id;
 
                           return (
                             <div
-                              key={qKey} // ✅ stable key
-                              className="border rounded-xl p-4 dark:border-gray-700"
+                              key={qKey}
+                              className="border rounded-xl p-4 dark:border-gray-700 relative"
                             >
+                              {/* (Optional) per-question spinner indicator */}
+                              {/* {questionBeingDeleted && (
+                                <div className="absolute top-3 right-3">
+                                  <span className="inline-block h-4 w-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                                </div>
+                              )} */}
+
                               <div className="flex items-start gap-3">
                                 <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 select-none">
                                   Q{myIndex}.
@@ -461,7 +591,7 @@ export default function Chapters() {
                                       : []
                                     ).map((opt, i) => (
                                       <li
-                                        key={`${qKey}-opt-${i}`} // ✅ stable per-question option key
+                                        key={`${qKey}-opt-${i}`}
                                         className={`px-2 py-1 rounded ${
                                           i === q.correctAnswer
                                             ? "bg-green-100 dark:bg-green-800"
@@ -493,7 +623,12 @@ export default function Chapters() {
                                       }}
                                     />
                                     <button
-                                      onClick={() => deleteQuestion(q.id)}
+                                      onClick={() =>
+                                        openConfirmDelete("question", {
+                                          id: q.id,
+                                          text: q.text,
+                                        })
+                                      }
                                       className="px-3 py-1 bg-red-500 text-white rounded-lg"
                                     >
                                       Delete
@@ -574,6 +709,26 @@ export default function Chapters() {
           </div>
         </div>
       )}
+
+      {/* CONFIRMATION MODAL */}
+      <ConfirmDialog
+        open={!!confirmState}
+        title={
+          confirmState?.type === "chapter"
+            ? "Delete Chapter"
+            : "Delete Question"
+        }
+        message={
+          confirmState?.type === "chapter"
+            ? `Are you sure you want to delete the chapter “${confirmState?.name}”? This will remove all its questions.`
+            : `Are you sure you want to delete this question?\n\n${confirmState?.name || ""}`
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        loading={confirmLoading}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </div>
   );
 }
