@@ -18,7 +18,7 @@ import AddAnnouncement from "./pages/AddAnnouncement.jsx";
 // Components
 import Header from "./components/Header.jsx";
 import BottomNav from "./components/BottomNav.jsx";
-import Sidebar from "./components/Sidebar.jsx";
+import Sidebar from "./components/SideBar.jsx";
 import Footer from "./components/Footer.jsx";
 import AuthModal from "./components/AuthModal.jsx";
 
