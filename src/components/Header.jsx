@@ -4,33 +4,7 @@ import { getAuth, onAuthStateChanged, signOut } from "firebase/auth";
 import axios from "axios";
 import ValidationModal from "./ValidationModal";
 
-/** Safe ISO from any input (Timestamp/string/Date) with fallback */
-function toIsoOrFallback(input, fallbackDate = new Date(0)) {
-  try {
-    if (!input) return fallbackDate.toISOString();
-
-    if (typeof input === "object" && input !== null) {
-      if (typeof input.toDate === "function") {
-        const d = input.toDate();
-        return isNaN(d?.getTime())
-          ? fallbackDate.toISOString()
-          : d.toISOString();
-      }
-      if (typeof input.seconds === "number") {
-        const d = new Date(input.seconds * 1000);
-        return isNaN(d.getTime())
-          ? fallbackDate.toISOString()
-          : d.toISOString();
-      }
-    }
-
-    const d = new Date(input);
-    return isNaN(d.getTime()) ? fallbackDate.toISOString() : d.toISOString();
-  } catch {
-    return fallbackDate.toISOString();
-  }
-}
-
+/** --- Helpers for localStorage-based last-visited timestamp --- */
 const LS_LAST_VISITED_KEY = "announcements:lastVisitedAt";
 
 function getLastVisitedIsoFromLS() {
@@ -61,9 +35,13 @@ export default function Header({
   const auth = getAuth();
 
   const [firebaseUser, setFirebaseUser] = useState(null);
+
+  // ✅ dbUser is back for validation/subscription/UI state
+  const [dbUser, setDbUser] = useState(null);
+
   const [showModal, setShowModal] = useState(false);
 
-  // 🔔 unread announcement count (localStorage-based)
+  // 🔔 unread announcement count (LOCAL-ONLY logic)
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingCount, setLoadingCount] = useState(false);
 
@@ -73,8 +51,8 @@ export default function Header({
       "https://ugliest-hannie-ezaz-307892de.koyeb.app",
     [],
   );
-  const mountedRef = useRef(true);
 
+  const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -82,16 +60,58 @@ export default function Header({
     };
   }, []);
 
-  // Listen to Firebase auth state (UI-only; announcements logic is localStorage)
+  /** ---------------------------
+   *  Auth listener + fetch dbUser
+   *  ---------------------------
+   *  We bring back the /api/users/:uid GET so:
+   *  - validation buttons can render (is_validated, request_sent)
+   *  - other profile-driven UI can work
+   *  NOTE: This does NOT affect announcements unread logic.
+   */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setFirebaseUser(currentUser);
-      // No DB user fetch; announcements last-read is local-only now
-    });
-    return () => unsubscribe();
-  }, [auth]);
 
-  // Fetch unread announcement count using localStorage "after"
+      if (!currentUser) {
+        if (mountedRef.current) {
+          setDbUser(null);
+          // unreadCount is local-only; keep it
+        }
+        return;
+      }
+
+      try {
+        let headers = {};
+        try {
+          const token = await currentUser.getIdToken();
+          if (token) headers.Authorization = `Bearer ${token}`;
+        } catch {
+          // If your backend allows public GET, token is optional
+        }
+
+        const res = await axios.get(
+          `${API_BASE}/api/users/${currentUser.uid}`,
+          {
+            headers,
+            timeout: 12000,
+          },
+        );
+
+        if (mountedRef.current) {
+          setDbUser(res?.data || null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch DB user:", err);
+        if (mountedRef.current) setDbUser(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [auth, API_BASE]);
+
+  /** -----------------------------------------------
+   *  Fetch unread announcements count using localStorage
+   *  ----------------------------------------------- */
   useEffect(() => {
     const fetchUnread = async () => {
       const afterIso = getLastVisitedIsoFromLS();
@@ -120,15 +140,17 @@ export default function Header({
       }
     };
 
-    // Run on mount and whenever API_BASE changes
     fetchUnread();
   }, [API_BASE]);
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setFirebaseUser(null);
-      // unreadCount remains local; no server interaction
+      if (mountedRef.current) {
+        setFirebaseUser(null);
+        setDbUser(null);
+        // unreadCount remains local; do not reset
+      }
     } catch (err) {
       console.error("Logout failed:", err);
     }
@@ -139,6 +161,8 @@ export default function Header({
    * 1) Optimistically reset badge to 0
    * 2) Write "now" to localStorage as lastVisited
    * 3) Navigate to announcements
+   *
+   * ❌ NO server PUT to /users/:uid/last-notified (per your requirement)
    */
   const handleClickBell = async () => {
     try {
@@ -146,7 +170,6 @@ export default function Header({
       setUnreadCount(0);
       setLastVisitedIsoToLS(nowIso);
     } catch (err) {
-      // Even if storage fails, still navigate; count will refresh next time
       console.warn("Failed to persist lastVisitedAt:", err);
     } finally {
       onGoAnnouncements?.();
@@ -173,7 +196,7 @@ export default function Header({
                 className="text-base sm:text-lg md:text-2xl font-semibold tracking-tight truncate whitespace-nowrap"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                title={title} // shows full title on hover
+                title={title}
               >
                 {title}
               </motion.h1>
@@ -267,8 +290,86 @@ export default function Header({
                 </>
               ) : (
                 <>
-                  {/* Validation Buttons — unchanged, relies on your existing dbUser logic elsewhere if needed */}
-                  {/* If you no longer have dbUser here, you can disable these or wire them to your current UI state */}
+                  {/* Validation Buttons (dbUser-driven) */}
+                  {dbUser && !dbUser.is_validated && !dbUser.request_sent && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded-full bg-orange-500 text-white p-2 hover:bg-orange-600 md:px-3 md:py-1.5 md:text-xs"
+                      onClick={() => setShowModal(true)}
+                      aria-label="Get Subscribed"
+                      title="Get Subscribed"
+                    >
+                      {/* Mobile label */}
+                      <span className="inline md:hidden">Get Subscribed</span>
+                      {/* Desktop label */}
+                      <span className="hidden md:inline">Get Validated</span>
+                      <svg
+                        className="h-5 w-5 ml-1 hidden md:inline"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 11l3-3m0 0l3 3m-3-3v8"
+                        />
+                      </svg>
+                    </motion.button>
+                  )}
+
+                  {dbUser && !dbUser.is_validated && dbUser.request_sent && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded-full bg-teal-600 text-white p-2 cursor-not-allowed md:px-3 md:py-1.5 md:text-xs"
+                      disabled
+                      aria-label="Pending"
+                      title="Pending"
+                    >
+                      <span className="md:inline hidden">Pending</span>
+                      <svg
+                        className="h-5 w-5 md:hidden"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 8v4l3 3"
+                        />
+                      </svg>
+                    </motion.button>
+                  )}
+
+                  {dbUser && dbUser.is_validated && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded-full bg-green-600 text-white p-2 cursor-default md:px-3 md:py-1.5 md:text-xs"
+                      disabled
+                      aria-label="Subscribed"
+                      title="Subscribed"
+                    >
+                      <span className="md:inline hidden">Subscribed</span>
+                      <svg
+                        className="h-5 w-5 md:hidden"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    </motion.button>
+                  )}
+
                   {/* Logout */}
                   <motion.button
                     whileTap={{ scale: 0.97 }}
@@ -299,7 +400,7 @@ export default function Header({
         </div>
       </header>
 
-      {/* Validation Modal (kept as-is) */}
+      {/* Validation Modal */}
       <ValidationModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
