@@ -169,127 +169,219 @@ export default function Header({
   return (
     <>
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-gray-950/80 border-b border-gray-200 dark:border-gray-800">
-        <div className="mx-auto max-w-md md:max-w-lg lg:max-w-5xl xl:max-w-7xl px-4 py-3 flex items-center justify-between">
-          {/* Logo + Title */}
-          <div className="flex items-center gap-3">
-            <motion.img
-              src="/mastermind-logo.png"
-              alt="Mastermind logo"
-              className="h-12 w-12 shrink-0"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: "spring", stiffness: 260, damping: 20 }}
-            />
-
-            <motion.h1
-              className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              {title}
-            </motion.h1>
-          </div>
-
-          {/* Right Side Buttons */}
-          <div className="flex items-center gap-2">
-            {/* 🔔 Bell (Announcements) */}
-            <motion.button
-              type="button"
-              aria-label="Announcements"
-              title="Announcements"
-              whileTap={{ scale: 0.97 }}
-              onClick={handleClickBell}
-              className="relative rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-            >
-              {/* Inline SVG bell icon */}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-700 dark:text-gray-200"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="1.8"
+        <div className="mx-auto w-full max-w-7xl px-3 sm:px-4 py-2.5 sm:py-3">
+          {/* Row: allow wrapping */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-between">
+            {/* Left: Logo + Title (allow shrink/truncate) */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <motion.img
+                src="/mastermind-logo.png"
+                alt="Mastermind logo"
+                className="h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 shrink-0"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 20 }}
+              />
+              <motion.h1
+                className="text-base sm:text-lg md:text-2xl font-semibold tracking-tight truncate whitespace-nowrap"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                title={title} // shows full title on hover
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"
-                />
-              </svg>
+                {title}
+              </motion.h1>
+            </div>
 
-              {/* 🔴 Badge (hidden when 0 or loading) */}
-              {firebaseUser && !loadingCount && unreadCount > 0 && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] leading-[18px] text-center font-semibold shadow"
-                  title={`${unreadCount} new`}
+            {/* Right: Actions (compact on small screens) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-none">
+              {/* 🔔 Bell (Announcements) */}
+              <motion.button
+                type="button"
+                aria-label="Announcements"
+                title="Announcements"
+                whileTap={{ scale: 0.97 }}
+                onClick={handleClickBell}
+                className="relative rounded-full p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-700 dark:text-gray-200"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
                 >
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V4a2 2 0 10-4 0v1.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9"
+                  />
+                </svg>
+
+                {firebaseUser && !loadingCount && unreadCount > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] leading-[18px] text-center font-semibold shadow"
+                    title={`${unreadCount} new`}
+                  >
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+              </motion.button>
+
+              {/* NOT LOGGED IN */}
+              {!firebaseUser ? (
+                <>
+                  {/* Icon-only on xs, text on md+ */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    className="rounded-full bg-teal-600 text-white p-2 hover:bg-teal-700 md:px-3 md:py-1.5 md:text-xs"
+                    onClick={onOpenAuth}
+                    aria-label="Log in"
+                    title="Log in"
+                  >
+                    <span className="md:inline hidden">Log in</span>
+                    <svg
+                      className="h-5 w-5 md:hidden"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M15 12H3m0 0l4-4m-4 4l4 4m6-10h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"
+                      />
+                    </svg>
+                  </motion.button>
+
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    className="rounded-full border border-teal-600 text-teal-700 dark:text-teal-300 p-2 hover:bg-teal-50 dark:hover:bg-teal-900/20 md:px-3 md:py-1.5 md:text-xs"
+                    onClick={onOpenRegister}
+                    aria-label="Register"
+                    title="Register"
+                  >
+                    <span className="md:inline hidden">Register</span>
+                    <svg
+                      className="h-5 w-5 md:hidden"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                  </motion.button>
+                </>
+              ) : (
+                <>
+                  {/* Validation Buttons */}
+                  {dbUser && !dbUser.is_validated && !dbUser.request_sent && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded-full bg-orange-500 text-white p-2 hover:bg-orange-600 md:px-3 md:py-1.5 md:text-xs"
+                      onClick={() => setShowModal(true)}
+                      aria-label="Get Validated"
+                      title="Get Validated"
+                    >
+                      <span className="md:inline hidden">Get Validated</span>
+                      <svg
+                        className="h-5 w-5 md:hidden"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 11l3-3m0 0l3 3m-3-3v8"
+                        />
+                      </svg>
+                    </motion.button>
+                  )}
+
+                  {dbUser && !dbUser.is_validated && dbUser.request_sent && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded-full bg-teal-600 text-white p-2 cursor-not-allowed md:px-3 md:py-1.5 md:text-xs"
+                      disabled
+                      aria-label="Pending"
+                      title="Pending"
+                    >
+                      <span className="md:inline hidden">Pending</span>
+                      <svg
+                        className="h-5 w-5 md:hidden"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M12 8v4l3 3"
+                        />
+                      </svg>
+                    </motion.button>
+                  )}
+
+                  {dbUser && dbUser.is_validated && (
+                    <motion.button
+                      whileTap={{ scale: 0.97 }}
+                      className="rounded-full bg-green-600 text-white p-2 cursor-default md:px-3 md:py-1.5 md:text-xs"
+                      disabled
+                      aria-label="Subscribed"
+                      title="Subscribed"
+                    >
+                      <span className="md:inline hidden">Subscribed</span>
+                      <svg
+                        className="h-5 w-5 md:hidden"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    </motion.button>
+                  )}
+
+                  {/* Logout */}
+                  <motion.button
+                    whileTap={{ scale: 0.97 }}
+                    className="rounded-full bg-red-600 text-white p-2 hover:bg-red-700 md:px-3 md:py-1.5 md:text-xs"
+                    onClick={handleLogout}
+                    aria-label="Logout"
+                    title="Logout"
+                  >
+                    <span className="md:inline hidden">Logout</span>
+                    <svg
+                      className="h-5 w-5 md:hidden"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h5a2 2 0 012 2v1"
+                      />
+                    </svg>
+                  </motion.button>
+                </>
               )}
-            </motion.button>
-
-            {/* Not Logged In */}
-            {!firebaseUser ? (
-              <>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  className="rounded-full bg-teal-600 text-white px-3 py-1.5 text-xs hover:bg-teal-700"
-                  onClick={onOpenAuth}
-                >
-                  Log in
-                </motion.button>
-
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  className="rounded-full border border-teal-600 text-teal-700 dark:text-teal-300 px-3 py-1.5 text-xs hover:bg-teal-50 dark:hover:bg-teal-900/20"
-                  onClick={onOpenRegister}
-                >
-                  Register
-                </motion.button>
-              </>
-            ) : (
-              <>
-                {/* Validation Buttons */}
-                {dbUser && !dbUser.is_validated && !dbUser.request_sent && (
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    className="rounded-full bg-orange-500 text-white px-3 py-1.5 text-xs hover:bg-orange-600"
-                    onClick={() => setShowModal(true)}
-                  >
-                    Get Validated
-                  </motion.button>
-                )}
-
-                {dbUser && !dbUser.is_validated && dbUser.request_sent && (
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    className="rounded-full bg-teal-600 text-white px-3 py-1.5 text-xs cursor-not-allowed"
-                    disabled
-                  >
-                    Pending
-                  </motion.button>
-                )}
-
-                {dbUser && dbUser.is_validated && (
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    className="rounded-full bg-green-600 text-white px-3 py-1.5 text-xs cursor-default"
-                    disabled
-                  >
-                    Subscribed
-                  </motion.button>
-                )}
-
-                {/* Logout */}
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  className="rounded-full bg-red-600 text-white px-3 py-1.5 text-xs hover:bg-red-700"
-                  onClick={handleLogout}
-                >
-                  Logout
-                </motion.button>
-              </>
-            )}
+            </div>
           </div>
         </div>
       </header>
