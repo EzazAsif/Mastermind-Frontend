@@ -56,7 +56,7 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
         <div className="flex flex-col items-center gap-2 mb-4">
           <img src="/bkash-logo.png" alt="bKash" className="h-10" />
           <p className="text-sm text-gray-600 dark:text-gray-300 text-center">
-            Send <span className="font-semibold">200৳</span> to:
+            Send <span className="font-semibold">3500৳</span> to:
           </p>
           <p className="text-pink-600 font-bold text-lg">01723724262</p>
         </div>
@@ -64,7 +64,7 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
             type="text"
-            placeholder="Enter Transaction ID"
+            placeholder="Enter Phone Nymber"
             value={transactionId}
             onChange={(e) => setTransactionId(e.target.value)}
             className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"

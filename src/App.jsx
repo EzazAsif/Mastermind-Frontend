@@ -41,6 +41,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
+  // NEW: Gating modal state
+  const [showGateModal, setShowGateModal] = useState(false);
+
   // ------------------------- Fetch Current User -------------------------
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
@@ -67,6 +70,19 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // ------------------------- Chance-based modal on load -------------------------
+  useEffect(() => {
+    // Run only after we've finished loading the user
+    if (!loadingUser) {
+      const notLoggedIn = !currentUser;
+      const notValidated = !currentUser?.is_validated;
+
+      if ((notLoggedIn || notValidated) && Math.random() < 0.33) {
+        setShowGateModal(true);
+      }
+    }
+  }, [loadingUser, currentUser]);
 
   // ------------------------- Pages Map -------------------------
   const PAGES = useMemo(() => {
@@ -172,7 +188,7 @@ export default function App() {
             setRegisterOpen(true);
             setAuthOpen(false);
           }}
-          onGoAnnouncements={() => setRoute("announcements")} // ✅ Add this line
+          onGoAnnouncements={() => setRoute("announcements")} // ✅
         />
 
         {/* Layout */}
@@ -208,6 +224,7 @@ export default function App() {
         <div className="lg:hidden">
           <BottomNav route={route} onChange={setRoute} user={currentUser} />
         </div>
+
         {/* Auth Modals */}
         <AuthModal
           open={authOpen}
@@ -219,6 +236,72 @@ export default function App() {
           mode="register"
           onClose={() => setRegisterOpen(false)}
         />
+
+        {/* ---------------- Gate Modal (33% chance) ---------------- */}
+        <AnimatePresence>
+          {showGateModal && (
+            <motion.div
+              className="fixed inset-0 z-50 flex items-center justify-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              aria-modal="true"
+              role="dialog"
+              aria-labelledby="gate-modal-title"
+              aria-describedby="gate-modal-desc"
+            >
+              {/* Backdrop */}
+              <div
+                className="absolute inset-0 bg-black/50"
+                onClick={() => setShowGateModal(false)}
+              />
+
+              {/* Modal Card */}
+              <motion.div
+                className="relative z-10 w-[92%] max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-gray-900 border border-gray-200 dark:border-gray-800"
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+              >
+                <h3
+                  id="gate-modal-title"
+                  className="text-lg font-semibold text-gray-900 dark:text-gray-100"
+                >
+                  Unlock Full Access
+                </h3>
+                <p
+                  id="gate-modal-desc"
+                  className="mt-2 text-sm text-gray-600 dark:text-gray-300"
+                >
+                  To get full content and take exams, please login and
+                  subscribe.
+                </p>
+
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <button
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
+                    onClick={() => setShowGateModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    onClick={() => {
+                      setShowGateModal(false);
+                      // Open login (or switch to register if you prefer)
+                      setAuthOpen(true);
+                      setRegisterOpen(false);
+                      // If you have a dedicated subscription flow, navigate or open it here.
+                    }}
+                  >
+                    Login & Subscribe
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {/* --------------------------------------------------------- */}
       </div>
     </div>
   );
