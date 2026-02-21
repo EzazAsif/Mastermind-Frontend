@@ -466,22 +466,6 @@ function ProfileModal({
               />
             </div>
 
-            {/* Profile Photo (optional) */}
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Profile Photo
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Uploading a new photo updates your Firebase profile picture.
-              </p>
-            </div>
-
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"
