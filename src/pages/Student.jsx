@@ -279,171 +279,271 @@ export default function Student({ onOpenAuth, setRoute }) {
     [latestAnnouncements],
   );
 
-  // ==== PDF: Professional, minimal certificate (no signatures/unnecessary fields) ====
+  // === HSC-style Certificate, website-issued, no gibberish, hide empty fields, no QR, wrapped header ===
   async function handleDownloadCertificate() {
     try {
       setDownloading(true);
 
-      const studentName = data?.student?.name || "Student";
+      // ---- Inputs from your state / backend ----
+      const studentName = (data?.student?.name || "Student").trim();
       const mark = Number(lastScore) || 0;
       const grade = getGrade(mark);
 
-      // Palette (Teal & Orange) — aligns with your brand
-      const TEAL = [15, 139, 141]; // #0F8B8D
-      const ORANGE = [246, 170, 28]; // #F6AA1C
-      const DARK = [28, 28, 30];
-      const GREY = [90, 96, 106];
-      const LIGHT_BORDER = [230, 233, 238];
+      const boardNameEn = (board || "").trim(); // e.g., "Jessore"
+      const examYearStr = String(examYear || "").trim(); // e.g., "2025"
+      const examTitle = "Higher Secondary Certificate (HSC)";
+      const subjectTitle = "ICT MCQ Assessment";
 
+      // OPTIONAL fields — if empty/undefined, they will be hidden
+      const rollNo = undefined; // e.g., dbUser.rollNo
+      const regNo = undefined; // e.g., dbUser.regNo
+      const centerName = undefined; // e.g., dbUser.center
+      const sessionStr = examYearStr
+        ? `${Number(examYearStr) - 1}-${examYearStr}`
+        : undefined;
+
+      // ---- Design Palette ----
+      const TEAL = [0, 121, 107];
+      const GOLD = [191, 144, 0];
+      const DARK = [34, 34, 34];
+      const GREY = [95, 99, 104];
+      const LIGHT = [242, 244, 247];
+      const BORDER = [220, 223, 230];
+
+      // ---- Create doc ----
       const doc = new jsPDF({ unit: "pt", format: "A4" });
       const W = doc.internal.pageSize.getWidth();
       const H = doc.internal.pageSize.getHeight();
 
-      // Header (brand band)
-      doc.setFillColor(...TEAL);
-      doc.rect(0, 0, W, 84, "F");
+      // ---- Page Border ----
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(1.2);
+      doc.rect(24, 24, W - 48, H - 48);
+      doc.setDrawColor(...BORDER);
+      doc.rect(36, 36, W - 72, H - 72);
 
-      // Try logo from /public
+      // ---- Header Band with logo ----
+      const bandH = 88;
+      const bandX = 36;
+      const bandY = 36;
+      const bandW = W - 72;
+      doc.setFillColor(...LIGHT);
+      doc.rect(bandX, bandY, bandW, bandH, "F");
+
+      // Logo
+      const logoX = 52;
+      const logoY = 46;
+      const logoSize = 64;
       try {
-        const img = await loadImage("/mastermind-logo.png");
-        const logoW = 68;
-        const logoH = 68;
-        doc.addImage(img, "PNG", 40, 8, logoW, logoH);
+        const logo = await loadImage("/mastermind-logo.png");
+        doc.addImage(logo, "PNG", logoX, logoY, logoSize, logoSize);
       } catch {
-        // Minimal fallback
+        doc.setDrawColor(...GOLD);
+        doc.setLineWidth(2);
+        doc.circle(logoX + logoSize / 2, logoY + logoSize / 2, logoSize / 2.3);
         doc.setFont("helvetica", "bold");
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(20);
-        doc.text("MASTERMIND", 40, 58);
+        doc.setTextColor(...GOLD);
+        doc.setFontSize(10);
+        doc.text("LOGO", logoX + logoSize / 2, logoY + logoSize / 2 + 4, {
+          align: "center",
+        });
       }
 
-      // Title
+      // Header text — WEBSITE, not Board
+      const headerLeft = logoX + logoSize + 20;
+      const headerRightMargin = 24; // safe padding to the right edge
+      const headerMaxWidth = W - headerLeft - headerRightMargin - 36; // inside inner border
+
+      // Title line
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
-      doc.setFontSize(26);
-      doc.text("Certificate of Achievement", W / 2, 150, { align: "center" });
+      doc.setFontSize(15);
+      doc.text("Mastermind (Website)", headerLeft, 65);
 
-      // Subline
+      // Subtitle line (wrapped to avoid overflow)
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(12);
-      doc.text("Presented to", W / 2, 176, { align: "center" });
+      const subtitle =
+        "This certificate is issued by the Mastermind website and is not affiliated with any Education Board.";
+      const subtitleLines = doc.splitTextToSize(subtitle, headerMaxWidth);
+      doc.text(subtitleLines, headerLeft, 85);
 
-      // Recipient
+      // ---- Certificate Title ----
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
-      doc.setFontSize(30);
-      doc.text(studentName, W / 2, 210, { align: "center" });
+      doc.setFontSize(22);
+      doc.text("Provisional Result Certificate", W / 2, 165, {
+        align: "center",
+      });
 
-      // Short description
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
-      doc.setFontSize(12);
-      const examName = "ICT MCQ Assessment";
+      doc.setFontSize(11);
       doc.text(
-        `For successful participation and performance in the ${examName}.`,
+        "This document certifies the following particulars and result, generated by Mastermind (website).",
         W / 2,
-        238,
+        184,
         { align: "center" },
       );
 
-      // Content card outline
-      const cardX = W * 0.12;
-      const cardW = W * 0.76;
-      const cardY = 265;
-      const cardH = 250;
+      // ---- Serial Row (left only; QR removed) ----
+      const infoX = 52;
+      const infoY = 210;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...GREY);
+      doc.setFontSize(11);
+      const serialNo = "MM-HSC-" + String(Date.now()).slice(-8);
+      doc.text(`Serial No.: ${serialNo}`, infoX, infoY);
 
-      doc.setDrawColor(...LIGHT_BORDER);
+      // ---- Formal Statement ----
+      const stmtX = 52;
+      const stmtY = 250;
+      const stmtW = W - 104;
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...DARK);
+      doc.setFontSize(12);
+
+      const boardPart = boardNameEn ? `, ${boardNameEn}` : "";
+      const yearPart = examYearStr ? `, ${examYearStr}` : "";
+      const statementEn = `This is to certify that ${studentName} has participated in the ${subjectTitle} under the ${examTitle}${boardPart}${yearPart}. The particulars and result are presented below.`;
+      const linesEn = doc.splitTextToSize(statementEn, stmtW);
+      doc.text(linesEn, stmtX, stmtY);
+
+      // ---- Details Card ----
+      const cardX = 52;
+      const cardY = stmtY + 48;
+      const cardW = W - 104;
+      const cardH = 230;
+
+      doc.setDrawColor(...BORDER);
       doc.setLineWidth(1);
       doc.roundedRect(cardX, cardY, cardW, cardH, 10, 10, "S");
 
-      // Section heading
+      // Title strip
+      doc.setFillColor(...TEAL);
+      doc.roundedRect(cardX, cardY, 200, 26, 10, 10, "F");
       doc.setFont("helvetica", "bold");
-      doc.setTextColor(...DARK);
-      doc.setFontSize(14);
-      doc.text("Exam Details", cardX + 18, cardY + 30);
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(12);
+      doc.text("Candidate Details & Result", cardX + 12, cardY + 17);
 
-      // Divider under heading
-      doc.setDrawColor(...TEAL);
-      doc.setLineWidth(1);
-      doc.line(cardX + 18, cardY + 40, cardX + cardW - 18, cardY + 40);
+      // Helpers
+      const leftX = cardX + 16;
+      const rightX = cardX + cardW / 2 + 8;
+      let y = cardY + 54;
+      const rowGap = 42;
 
-      // Details grid (2 columns)
-      const leftX = cardX + 18;
-      const rightX = cardX + cardW / 2 + 6;
-      let rowY = cardY + 70;
-      const rowGap = 34;
+      const addField = (label, value, x, yPos) => {
+        if (value === undefined || value === null) return yPos; // hide
+        const str = String(value).trim();
+        if (!str) return yPos; // hide empty/whitespace
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...GREY);
+        doc.setFontSize(11);
+        doc.text(label, x, yPos);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...DARK);
+        doc.setFontSize(12);
+        doc.text(str, x, yPos + 18);
+        return yPos + rowGap;
+      };
 
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...GREY);
-      doc.setFontSize(11);
+      // Left column (conditionally show)
+      y = addField("Candidate Name", studentName, leftX, y);
+      y = addField("Roll No.", rollNo, leftX, y);
+      y = addField("Registration No.", regNo, leftX, y);
+      y = addField("Session", sessionStr, leftX, y);
 
-      // Left column
-      doc.text("Board", leftX, rowY);
+      // Right column (conditionally show)
+      let ry = cardY + 54;
+      ry = addField("Board", boardNameEn || undefined, rightX, ry);
+      ry = addField("Exam Year", examYearStr || undefined, rightX, ry);
+      ry = addField("Exam", examTitle, rightX, ry);
+      ry = addField("Exam Centre", centerName, rightX, ry);
+
+      // Divider Line
+      doc.setDrawColor(...BORDER);
+      doc.setLineWidth(0.8);
+      doc.line(
+        cardX + 12,
+        cardY + cardH - 84,
+        cardX + cardW - 12,
+        cardY + cardH - 84,
+      );
+
+      // Result Row
+      const rY = cardY + cardH - 58;
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(12);
-      doc.text(String(board || "—"), leftX, rowY + 18);
+      doc.text("Result (Grade):", cardX + 16, rY);
 
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...GREY);
-      doc.setFontSize(11);
-      rowY += rowGap;
-      doc.text("Exam Year", leftX, rowY);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...DARK);
-      doc.setFontSize(12);
-      doc.text(String(examYear || "—"), leftX, rowY + 18);
-
-      // Right column
-      let rY = cardY + 70;
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...GREY);
-      doc.setFontSize(11);
-      doc.text("Score (%)", rightX, rY);
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...DARK);
-      doc.setFontSize(12);
-      doc.text(String(Number(lastScore) || 0), rightX, rY + 18);
-
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(...GREY);
-      doc.setFontSize(11);
-      rY += rowGap;
-      doc.text("Grade", rightX, rY);
-      // Grade badge (solid fill, compact)
+      // Grade badge
       const gradeText = grade;
       const badgePaddingX = 10;
-      const badgeY = rY + 6;
       const textW = doc.getTextWidth(gradeText) + badgePaddingX * 2;
-      const badgeX = rightX - 2;
-      doc.setFillColor(...(gradeText === "Needs improvement" ? ORANGE : TEAL));
-      doc.roundedRect(badgeX, badgeY, textW, 22, 6, 6, "F");
+      const badgeX = cardX + 130;
+      doc.setFillColor(...(gradeText === "Needs improvement" ? GOLD : TEAL));
+      doc.roundedRect(badgeX, rY - 14, textW, 22, 6, 6, "F");
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(11);
-      doc.text(gradeText, badgeX + badgePaddingX, badgeY + 15);
+      doc.text(gradeText, badgeX + badgePaddingX, rY + 2);
 
-      // Bottom row: Issue date + Exam
-      const bottomY = cardY + cardH - 24;
+      // Percentage
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...DARK);
+      doc.setFontSize(12);
+      doc.text("Score (%):", rightX, rY);
+      doc.text(String(mark), rightX + 80, rY);
+
+      // Issue Date
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(10);
-      doc.text(`Issued on ${new Date().toLocaleDateString()}`, leftX, bottomY);
-      doc.text(examName, rightX, bottomY);
+      doc.text(
+        `Issued on ${new Date().toLocaleDateString()}`,
+        cardX + 16,
+        cardY + cardH - 16,
+      );
 
-      // Footer subtle brand line
+      // ---- Signatures ----
+      const sigY = cardY + cardH + 72;
+      const sigBoxW = 180;
+      const leftSigX = 52;
+      const rightSigX = W - 52 - sigBoxW;
+
+      const signatureBlock = (x, title1, title2) => {
+        doc.setDrawColor(...BORDER);
+        doc.setLineWidth(1);
+        doc.line(x, sigY, x + sigBoxW, sigY);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...GREY);
+        doc.setFontSize(10);
+        doc.text(title1, x, sigY + 16);
+        doc.text(title2, x, sigY + 30);
+      };
+
+      signatureBlock(leftSigX, "Head of Institution", "(Signature & Seal)");
+      signatureBlock(
+        rightSigX,
+        "Controller (Website Operations)",
+        "(Authorized Signature)",
+      );
+
+      // ---- Footer note (explicit website issuance) ----
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(9);
       doc.text(
-        "Mastermind • Learning that elevates performance",
+        "Disclaimer: This certificate is generated by the Mastermind website for academic/reference purposes only and is NOT an official Education Board document.",
         W / 2,
         H - 40,
         { align: "center" },
       );
 
-      const filename = `certificate-${(studentName || "student")
+      const filename = `hsc-certificate-${(studentName || "student")
         .toLowerCase()
         .replace(/\s+/g, "-")}.pdf`;
       doc.save(filename);
@@ -454,6 +554,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       setDownloading(false);
     }
   }
+  ``;
 
   if (loading) {
     return (
