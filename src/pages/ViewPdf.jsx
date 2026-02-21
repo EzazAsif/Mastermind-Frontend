@@ -3,34 +3,32 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Document, Page, pdfjs } from "react-pdf";
 
-// 1) FIX THE WARNING: include annotation/text layer styles
-//    If your bundler doesn't support ESM CSS, see notes below for alternative import paths.
+// Required CSS for annotations (fixes the warning)
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-import "react-pdf/dist/esm/Page/TextLayer.css";
+// Enable if you want selectable text:
+// import "react-pdf/dist/esm/Page/TextLayer.css";
 
-// 2) PDF.js worker from CDN (works in Android Chrome/WebView)
-//    If you want offline, self-host the worker and import its URL instead.
+// PDF.js worker from CDN
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 export default function ViewPdf({ fileName, onBack }) {
-  // fileName is actually the full streaming URL
+  // fileName is the FULL streaming URL
   const fileUrl = fileName;
 
   const [zoom, setZoom] = useState(100); // 50–200%
-  const [numPages, setNumPages] = useState(null); // total pages after load
+  const [numPages, setNumPages] = useState(null);
   const [containerWidth, setContainerWidth] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
-  // ResizeObserver with cleanup
+  // Observe the scroll container width
   const roRef = useRef(null);
   const containerRef = useCallback((node) => {
     if (!node) return;
-    const padding = 32; // matches inner padding below
+    const padding = 32; // p-4 below
     const update = () => setContainerWidth(node.clientWidth - padding);
 
     update();
     const ro = new ResizeObserver(() => {
-      // rAF to avoid thrash during rapid resizes/rotation
       requestAnimationFrame(update);
     });
     ro.observe(node);
@@ -51,7 +49,15 @@ export default function ViewPdf({ fileName, onBack }) {
   const zoomOut = () => setZoom((z) => Math.max(z - 10, 50));
   const resetZoom = () => setZoom(100);
 
-  // Pass as object for future options (e.g., headers/credentials)
+  // Width logic:
+  // - zoom <= 100: fit-to-width (no tiny block)
+  // - zoom > 100: exceed container width to enable horizontal scroll
+  const computedPageWidth = useMemo(() => {
+    if (!containerWidth) return undefined;
+    if (zoom <= 100) return Math.floor(containerWidth);
+    return Math.floor((containerWidth * zoom) / 100);
+  }, [containerWidth, zoom]);
+
   const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
 
   if (!fileUrl) {
@@ -113,15 +119,27 @@ export default function ViewPdf({ fileName, onBack }) {
         </div>
       </div>
 
-      {/* PDF Container */}
+      {/* SCROLL CONTAINER */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="rounded-2xl overflow-auto border border-gray-200 dark:border-gray-800 shadow-soft bg-white dark:bg-gray-900 flex justify-center items-start"
-        style={{ height: "75vh" }}
+        className="rounded-2xl border border-gray-200 dark:border-gray-800 shadow-soft bg-white dark:bg-gray-900"
+        style={{
+          height: "75vh",
+          overflowX: "auto",
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          // Ensure gestures are recognized for horizontal pan on mobile
+          touchAction: "pan-x pan-y",
+        }}
         ref={containerRef}
       >
-        <div className="p-4 w-full flex flex-col items-center">
+        {/* CONTENT TRACK:
+            - Avoid w-full that clamps width
+            - Use min-w-full so at <=100% zoom it fits nicely
+            - Allow width to grow when >100% zoom
+        */}
+        <div className="p-4">
           <Document
             file={file}
             onLoadSuccess={onDocumentLoadSuccess}
@@ -131,7 +149,9 @@ export default function ViewPdf({ fileName, onBack }) {
               <div className="text-red-500 space-y-2 text-center">
                 <div>Failed to load PDF.</div>
                 {loadError && (
-                  <div className="text-xs opacity-70">{String(loadError)}</div>
+                  <div className="text-xs opacity-70 break-all">
+                    {String(loadError)}
+                  </div>
                 )}
                 <div className="text-sm text-gray-500">
                   Can’t see the PDF?{" "}
@@ -147,27 +167,31 @@ export default function ViewPdf({ fileName, onBack }) {
               </div>
             }
           >
-            {/* Render all pages. For very long PDFs, consider virtualization. */}
             {Array.from(new Array(numPages || 0), (_el, i) => (
-              <div key={`page_${i + 1}`} className="mb-4 flex justify-center">
+              <div
+                key={`page_${i + 1}`}
+                // IMPORTANT:
+                //  - inline-block lets the element exceed container width
+                //  - remove any max-width clamps
+                className="mb-4 inline-block align-top"
+                style={{
+                  // Let this wrapper grow beyond the container when zoomed in
+                  width: computedPageWidth
+                    ? `${computedPageWidth}px`
+                    : undefined,
+                }}
+              >
                 <Page
                   pageNumber={i + 1}
-                  // Use width-based sizing for responsiveness + zoom:
-                  width={
-                    containerWidth
-                      ? Math.floor((containerWidth * zoom) / 100)
-                      : undefined
-                  }
-                  // PERFORMANCE: keep text layer off unless you need selectable text
+                  width={computedPageWidth}
                   renderTextLayer={false}
-                  // Keep annotation layer on for links/forms; CSS imports above remove the warning
                   renderAnnotationLayer={true}
                 />
               </div>
             ))}
           </Document>
 
-          {/* Open in new tab fallback for odd WebViews */}
+          {/* Fallback link */}
           <div className="text-xs text-gray-500 mt-2">
             Having trouble?{" "}
             <a
@@ -181,6 +205,25 @@ export default function ViewPdf({ fileName, onBack }) {
           </div>
         </div>
       </motion.div>
+
+      {/* CSS OVERRIDES (crucial for horizontal scroll) */}
+      <style jsx global>{`
+        /* Remove width clamps that prevent horizontal overflow when zoomed in */
+        .react-pdf__Page {
+          max-width: none !important;
+        }
+        .react-pdf__Page__canvas {
+          max-width: none !important;
+          width: 100% !important; /* let the wrapper control width */
+          height: auto !important;
+          display: block;
+        }
+        /* Some builds apply max-width: 100% to images/canvas globally; negate that here */
+        canvas.react-pdf__Page__canvas {
+          max-width: none !important;
+        }
+      `}</style>
     </section>
   );
 }
+``;
