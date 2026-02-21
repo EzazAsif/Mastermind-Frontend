@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------------------
+   LIGHT / DARK MODE COLOR TOKENS
+--------------------------------------------------------*/
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  :root {
+    /* BRAND COLORS */
+    --mm-orange: #f86806;
+    --mm-orange-soft: #f8680615;
+    --mm-orange-dark: #d65504;
+
+    --mm-teal: #2c7c9d;
+    --mm-teal-soft: #2c7c9d15;
+    --mm-teal-dark: #1e5366;
+
+    /* SURFACES */
+    --mm-surface: #ffffff;
+    --mm-surface-2: #fbf8f6;
+    --mm-card: #ffffff;
+    --mm-border: #ebe8e5;
+
+    /* HEADER HEIGHT */
+    --header-h: 72px;
+
+    /* TEXT */
+    --mm-text: #0f172a;
+    --mm-text-muted: #6b7280;
+
+    /* LAYOUT HEIGHTS */
+    --footer-h: 64px; /* Mobile footer height */
+    --bottom-nav-h: 80px; /* Mobile bottom nav height */
+
+    /* SAFE AREAS */
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-top: env(safe-area-inset-top);
+  }
+
+  .dark {
+    --mm-orange: #f86806;
+    --mm-orange-soft: #f8680622;
+    --mm-orange-dark: #b94600;
+
+    --mm-teal: #2c7c9d;
+    --mm-teal-soft: #2c7c9d22;
+    --mm-teal-dark: #17404f;
+
+    --mm-surface: #0b0f1a;
+    --mm-surface-2: #0f172a;
+    --mm-card: #0f172a;
+
+    --mm-border: #1f2937;
+
+    --mm-text: #e5e7eb;
+    --mm-text-muted: #9ca3af;
+  }
+
+  /* GLOBAL BACKGROUND + TEXT */
+  body {
+    background: var(--mm-surface);
+    color: var(--mm-text);
+  }
+
+  /* Desktop adjustments */
+  @media (min-width: 1024px) {
+    :root {
+      --bottom-nav-h: 0px; /* Hide bottom nav on desktop */
+      --footer-h: 72px; /* Desktop footer taller */
+      --header-h: 72px;
+    }
+  }
+}
+
+/* -------------------------------------------------------
+   SEMANTIC COMPONENT CLASSES
+--------------------------------------------------------*/
+@layer components {
+  .card {
+    @apply w-full max-w-full overflow-hidden
+           bg-[var(--mm-card)]
+           border border-[var(--mm-border)]
+           rounded-xl shadow-soft;
+  }
+
+  .surface {
+    @apply w-full max-w-full bg-[var(--mm-surface)];
+  }
+
+  .surface-2 {
+    @apply w-full max-w-full bg-[var(--mm-surface-2)];
+  }
+
+  .muted {
+    color: var(--mm-text-muted);
+  }
+
+  /* BRAND UTILS */
+  .brand-bg {
+    background-color: var(--mm-orange);
+  }
+  .brand-bg-soft {
+    background-color: var(--mm-orange-soft);
+  }
+  .brand-text {
+    color: var(--mm-orange);
+  }
+  .brand-border {
+    border-color: var(--mm-orange);
+  }
+
+  .brand-teal-bg {
+    background-color: var(--mm-teal);
+  }
+  .brand-teal-bg-soft {
+    background-color: var(--mm-teal-soft);
+  }
+  .brand-teal-text {
+    color: var(--mm-teal);
+  }
+  .brand-teal-border {
+    border-color: var(--mm-teal);
+  }
+}
