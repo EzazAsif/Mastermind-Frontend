@@ -39,6 +39,31 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Inline Spinner (compact, no blocking overlay)
+  const Spinner = ({ className = "w-5 h-5 text-white" }) => (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  );
+
   /* =========================
      Effects
   ========================== */
@@ -287,8 +312,14 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
             role="dialog"
             aria-modal="true"
             aria-label={headerTitle}
+            aria-busy={submitting}
           >
-            <h3 className="text-lg font-semibold">{headerTitle}</h3>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              {headerTitle}
+              {submitting && (
+                <Spinner className="w-4 h-4 text-[var(--mm-teal)]" />
+              )}
+            </h3>
 
             {error && (
               <div className="text-sm bg-red-50 text-red-700 px-3 py-2 rounded-lg">
@@ -303,7 +334,8 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                 rows={4}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                className="w-full border rounded-xl p-2 resize-y"
+                disabled={submitting}
+                className="w-full border rounded-xl p-2 resize-y disabled:opacity-60"
               />
             </label>
 
@@ -314,15 +346,17 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                 <div key={i} className="flex items-center gap-2">
                   <input
                     type="text"
-                    className="w-full border rounded-xl p-2"
+                    className="w-full border rounded-xl p-2 disabled:opacity-60"
                     value={opt}
                     onChange={(e) => updateOption(i, e.target.value)}
+                    disabled={submitting}
                   />
                   <input
                     type="radio"
                     name="correct"
                     checked={correctAnswer === i}
                     onChange={() => setCorrectAnswer(i)}
+                    disabled={submitting}
                     aria-label={`Mark option ${i + 1} as correct`}
                   />
                 </div>
@@ -341,7 +375,8 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                   if (!v.trim()) setSetOrder(0); // auto-reset
                 }}
                 placeholder="Example: passage-001"
-                className="w-full border rounded-xl p-2"
+                disabled={submitting}
+                className="w-full border rounded-xl p-2 disabled:opacity-60"
               />
             </label>
 
@@ -352,8 +387,8 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                 type="number"
                 value={setOrder}
                 onChange={(e) => setSetOrder(Number(e.target.value))}
-                disabled={!setId.trim()}
-                className="w-full border rounded-xl p-2"
+                disabled={!setId.trim() || submitting}
+                className="w-full border rounded-xl p-2 disabled:opacity-60"
               />
             </label>
 
@@ -390,17 +425,24 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                 />
               )}
 
-              <input type="file" accept="image/*" onChange={handleFileChange} />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                disabled={submitting}
+                className="disabled:opacity-60"
+              />
 
               <input
                 type="url"
-                className="w-full border rounded-xl p-2"
+                className="w-full border rounded-xl p-2 disabled:opacity-60"
                 value={imageUrl}
                 onChange={(e) => {
                   const v = e.target.value.trimStart();
                   setImageUrl(v);
                   if (v) setImageFile(null);
                 }}
+                disabled={submitting}
                 placeholder="Paste image URL"
               />
 
@@ -410,6 +452,7 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
                     type="checkbox"
                     checked={removeImage}
                     onChange={(e) => setRemoveImage(e.target.checked)}
+                    disabled={submitting}
                   />
                   Remove existing image
                 </label>
@@ -421,15 +464,22 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
               <button
                 onClick={saveQuestion}
                 disabled={submitting}
-                className="w-full bg-[var(--mm-teal)] text-white py-2 rounded-xl"
+                className="w-full inline-flex items-center justify-center gap-2 bg-[var(--mm-teal)] text-white py-2 rounded-xl disabled:opacity-60"
               >
-                {submitting ? "Saving..." : "Save"}
+                {submitting ? (
+                  <>
+                    <Spinner />
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
               </button>
 
               <button
                 onClick={() => setShow(false)}
                 disabled={submitting}
-                className="w-full mt-2 py-2 border rounded-xl"
+                className="w-full mt-2 py-2 border rounded-xl disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -440,3 +490,4 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
     </>
   );
 }
+``;

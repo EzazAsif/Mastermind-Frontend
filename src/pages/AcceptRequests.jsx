@@ -2,6 +2,38 @@ import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 
+/* =========================
+   Small Reusable Spinner
+========================= */
+function Spinner({ className = "h-4 w-4 text-[var(--mm-teal)]" }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  );
+}
+
+/* =========================
+   Stable ID Helpers
+========================= */
 function hashString(s) {
   let h1 = 0xdeadbeef,
     h2 = 0x41c6ce57;
@@ -26,23 +58,30 @@ function stableIdFromRequest(req) {
     userId: req?.user?.uid ?? req?.userId ?? "",
     displayName: req?.user?.displayName ?? "",
     createdAt: req?.createdAt ?? "",
-    // add anything else your backend guarantees for uniqueness
   });
   return `req:${hashString(payload)}`;
 }
 
+/* =========================
+   Component
+========================= */
 export default function AcceptRequests() {
   const [search, setSearch] = useState("");
   const [requests, setRequests] = useState([]);
 
-  // Fetch real requests
+  // Loading states
+  const [loadingList, setLoadingList] = useState(false);
+  const [actionLoading, setActionLoading] = useState(
+    /** @type {Record<string, 'approve'|'reject'|undefined>} */ ({}),
+  );
+
   useEffect(() => {
     fetchRequests();
-    // Optionally: return a cancel token if your API supports it to avoid state updates after unmount
   }, []);
 
   const fetchRequests = async () => {
     try {
+      setLoadingList(true);
       const res = await axios.get(
         "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests",
       );
@@ -50,34 +89,59 @@ export default function AcceptRequests() {
     } catch (err) {
       console.error("Failed to load requests:", err);
       setRequests([]);
+    } finally {
+      setLoadingList(false);
     }
   };
 
+  const setItemLoading = (id, type) =>
+    setActionLoading((prev) => ({ ...prev, [id]: type }));
+  const clearItemLoading = (id) =>
+    setActionLoading((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
   // Approve
   const handleApprove = async (id) => {
+    if (!id) return;
+    setItemLoading(id, "approve");
     try {
+      // Optional optimistic removal (uncomment if desired):
+      // setRequests((prev) => prev.filter((r) => (r._id ?? stableIdFromRequest(r)) !== id));
+
       await axios.put(
         `https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests/approve/${id}`,
       );
-      fetchRequests();
+      await fetchRequests();
     } catch (err) {
       console.error("Approve failed:", err);
+    } finally {
+      clearItemLoading(id);
     }
   };
 
   // Reject
   const handleReject = async (id) => {
+    if (!id) return;
+    setItemLoading(id, "reject");
     try {
+      // Optional optimistic removal (uncomment if desired):
+      // setRequests((prev) => prev.filter((r) => (r._id ?? stableIdFromRequest(r)) !== id));
+
       await axios.put(
         `https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests/reject/${id}`,
       );
-      fetchRequests();
+      await fetchRequests();
     } catch (err) {
       console.error("Reject failed:", err);
+    } finally {
+      clearItemLoading(id);
     }
   };
 
-  // Filter
+  // Filter memo
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return requests;
@@ -90,8 +154,29 @@ export default function AcceptRequests() {
   }, [search, requests]);
 
   return (
-    <section className="space-y-6">
-      <h2 className="text-xl lg:text-2xl font-semibold">Accept Requests</h2>
+    <section className="space-y-6" aria-busy={loadingList}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl lg:text-2xl font-semibold flex items-center gap-2">
+          Accept Requests
+          {loadingList && <Spinner />}
+        </h2>
+
+        <button
+          onClick={fetchRequests}
+          disabled={loadingList}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 dark:border-gray-700 text-sm hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-60"
+        >
+          {loadingList ? (
+            <>
+              <Spinner className="h-4 w-4 text-inherit" />
+              Refreshing...
+            </>
+          ) : (
+            <>↻ Refresh</>
+          )}
+        </button>
+      </div>
 
       {/* Search */}
       <div className="max-w-md">
@@ -100,15 +185,25 @@ export default function AcceptRequests() {
           placeholder="Search by name or Transaction ID..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--mm-teal)]"
+          disabled={loadingList}
+          className="w-full px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--mm-teal)] disabled:opacity-60"
         />
       </div>
 
       {/* Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.length > 0 ? (
+        {loadingList && requests.length === 0 ? (
+          <div className="col-span-full flex items-center gap-2 text-gray-500 dark:text-gray-400">
+            <Spinner />
+            Loading requests...
+          </div>
+        ) : filtered.length > 0 ? (
           filtered.map((req) => {
             const key = stableIdFromRequest(req);
+            const idForActions = req?._id ?? req?.id ?? key;
+            const isApproving = actionLoading[idForActions] === "approve";
+            const isRejecting = actionLoading[idForActions] === "reject";
+
             return (
               <motion.div
                 key={key}
@@ -135,17 +230,33 @@ export default function AcceptRequests() {
 
                 <div className="flex gap-3 mt-5">
                   <button
-                    onClick={() => handleApprove(req?._id ?? key)}
-                    className="flex-1 py-2 text-sm rounded-xl bg-[var(--mm-teal)] text-white hover:opacity-90 transition"
+                    onClick={() => handleApprove(idForActions)}
+                    disabled={isApproving || isRejecting}
+                    className="flex-1 py-2 text-sm rounded-xl bg-[var(--mm-teal)] text-white hover:opacity-90 transition inline-flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    Accept
+                    {isApproving ? (
+                      <>
+                        <Spinner className="h-4 w-4 text-white" />
+                        Accepting...
+                      </>
+                    ) : (
+                      "Accept"
+                    )}
                   </button>
 
                   <button
-                    onClick={() => handleReject(req?._id ?? key)}
-                    className="flex-1 py-2 text-sm rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                    onClick={() => handleReject(idForActions)}
+                    disabled={isApproving || isRejecting}
+                    className="flex-1 py-2 text-sm rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition inline-flex items-center justify-center gap-2 disabled:opacity-60"
                   >
-                    Reject
+                    {isRejecting ? (
+                      <>
+                        <Spinner className="h-4 w-4" />
+                        Rejecting...
+                      </>
+                    ) : (
+                      "Reject"
+                    )}
                   </button>
                 </div>
               </motion.div>

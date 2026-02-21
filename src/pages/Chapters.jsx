@@ -3,6 +3,35 @@ import QuestionModal from "../components/QuestionModal";
 import { getPublicUrl } from "../utils/url"; // resolves /uploads/... to https://ugliest-hannie-ezaz-307892de.koyeb.app/uploads/...
 
 /* =========================
+   SMALL REUSABLE SPINNER
+========================= */
+function Spinner({ className = "h-5 w-5 text-[var(--mm-teal)]" }) {
+  return (
+    <svg
+      className={`animate-spin ${className}`}
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <circle
+        className="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="4"
+      />
+      <path
+        className="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+      />
+    </svg>
+  );
+}
+
+/* =========================
    STABLE KEY HELPERS
 ========================= */
 function djb2(str = "") {
@@ -84,6 +113,7 @@ function ConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
+        aria-busy={loading}
       >
         <h3 id="confirm-title" className="text-lg font-semibold mb-2">
           {title}
@@ -101,15 +131,10 @@ function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-4 py-2 bg-red-600 text-white rounded-xl disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-2"
             disabled={loading}
           >
-            {loading && (
-              <span
-                className="inline-block h-4 w-4 rounded-full border-2 border-white/70 border-t-transparent animate-spin"
-                aria-hidden
-              />
-            )}
+            {loading && <Spinner className="h-4 w-4 text-white" />}
             {loading ? "Deleting..." : confirmText}
           </button>
         </div>
@@ -129,13 +154,16 @@ export default function Chapters() {
   const [chapterTitle, setChapterTitle] = useState("");
   const [questionPercentage, setQuestionPercentage] = useState("");
 
+  // Loading states
+  const [loadingChapters, setLoadingChapters] = useState(false);
+  const [savingChapter, setSavingChapter] = useState(false);
+
   // Confirmation modal state
   const [confirmState, setConfirmState] = useState(
     /** @type {null | { type: 'chapter'|'question', id: string, name?: string }} */ (
       null
     ),
   );
-  // New: loading for delete action
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   /* =========================
@@ -143,6 +171,7 @@ export default function Chapters() {
   ========================== */
   const fetchChapters = async () => {
     try {
+      setLoadingChapters(true);
       const raw = await fetch(
         "https://ugliest-hannie-ezaz-307892de.koyeb.app/exams",
       ).then((res) => res.json());
@@ -156,6 +185,8 @@ export default function Chapters() {
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoadingChapters(false);
     }
   };
 
@@ -175,6 +206,8 @@ export default function Chapters() {
       return alert("Enter a valid question percentage (0-100)");
 
     try {
+      setSavingChapter(true);
+
       let updatedChapter;
       const payload = {
         title: chapterTitle.trim(),
@@ -215,6 +248,7 @@ export default function Chapters() {
     } catch (err) {
       console.error(err);
     } finally {
+      setSavingChapter(false);
       setShowChapterModal(false);
       setChapterTitle("");
       setQuestionPercentage("");
@@ -363,10 +397,13 @@ export default function Chapters() {
      JSX
   ========================== */
   return (
-    <div className="p-6">
+    <div className="p-6" aria-busy={loadingChapters}>
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Chapters</h1>
+        <h1 className="text-2xl font-bold flex items-center gap-3">
+          Chapters
+          {loadingChapters && <Spinner />}
+        </h1>
         <button
           onClick={() => {
             setEditingChapter(null);
@@ -374,7 +411,8 @@ export default function Chapters() {
             setQuestionPercentage("");
             setShowChapterModal(true);
           }}
-          className="px-4 py-2 bg-[var(--mm-teal)] text-white rounded-xl"
+          disabled={loadingChapters}
+          className="px-4 py-2 bg-[var(--mm-teal)] text-white rounded-xl disabled:opacity-60"
         >
           + Add Chapter
         </button>
@@ -382,60 +420,67 @@ export default function Chapters() {
 
       {/* CHAPTER CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {chapters.map((chapter) => (
-          <div
-            key={stableChapterId(chapter)}
-            className="p-5 rounded-2xl bg-white dark:bg-gray-900 shadow relative"
-          >
-            {/* (Optional) show a subtle spinner if this specific chapter is being deleted */}
-            {/* {confirmLoading && confirmState?.type === 'chapter' && confirmState?.id === chapter.id && (
-              <div className="absolute top-3 right-3">
-                <span className="inline-block h-4 w-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
-              </div>
-            )} */}
+        {chapters.map((chapter) => {
+          const chapterBeingDeleted =
+            confirmLoading &&
+            confirmState?.type === "chapter" &&
+            confirmState?.id === chapter.id;
 
+          return (
             <div
-              onClick={() => setSelectedChapter(chapter)}
-              className="cursor-pointer"
+              key={stableChapterId(chapter)}
+              className="p-5 rounded-2xl bg-white dark:bg-gray-900 shadow relative"
             >
-              <h3 className="font-semibold text-lg">{chapter.title}</h3>
-              <p className="text-sm text-gray-500">
-                {chapter.questions?.length || 0} Questions
-              </p>
-              <p className="text-sm text-gray-400">
-                Question Percentage: {chapter.questionPercentage}%
-              </p>
-            </div>
+              {/* tiny spinner on the card if this chapter is being deleted */}
+              {chapterBeingDeleted && (
+                <div className="absolute top-3 right-3">
+                  <Spinner className="h-4 w-4 text-gray-400" />
+                </div>
+              )}
 
-            <div className="flex gap-2 mt-4">
-              <button
-                onClick={() => {
-                  setEditingChapter(chapter);
-                  setChapterTitle(chapter.title);
-                  setQuestionPercentage(
-                    String(chapter.questionPercentage ?? ""),
-                  );
-                  setShowChapterModal(true);
-                }}
-                className="px-3 py-1 bg-yellow-500 text-white rounded-lg"
+              <div
+                onClick={() => setSelectedChapter(chapter)}
+                className="cursor-pointer"
               >
-                Edit
-              </button>
+                <h3 className="font-semibold text-lg">{chapter.title}</h3>
+                <p className="text-sm text-gray-500">
+                  {chapter.questions?.length || 0} Questions
+                </p>
+                <p className="text-sm text-gray-400">
+                  Question Percentage: {chapter.questionPercentage}%
+                </p>
+              </div>
 
-              <button
-                onClick={() =>
-                  openConfirmDelete("chapter", {
-                    id: chapter.id,
-                    title: chapter.title,
-                  })
-                }
-                className="px-3 py-1 bg-red-500 text-white rounded-lg"
-              >
-                Delete
-              </button>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => {
+                    setEditingChapter(chapter);
+                    setChapterTitle(chapter.title);
+                    setQuestionPercentage(
+                      String(chapter.questionPercentage ?? ""),
+                    );
+                    setShowChapterModal(true);
+                  }}
+                  className="px-3 py-1 bg-yellow-500 text-white rounded-lg"
+                >
+                  Edit
+                </button>
+
+                <button
+                  onClick={() =>
+                    openConfirmDelete("chapter", {
+                      id: chapter.id,
+                      title: chapter.title,
+                    })
+                  }
+                  className="px-3 py-1 bg-red-500 text-white rounded-lg"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* CHAPTER DETAIL VIEW */}
@@ -524,12 +569,12 @@ export default function Chapters() {
                               key={qKey}
                               className="border rounded-xl p-4 dark:border-gray-700 relative"
                             >
-                              {/* (Optional) per-question spinner indicator */}
-                              {/* {questionBeingDeleted && (
+                              {/* tiny spinner on the question card if being deleted */}
+                              {questionBeingDeleted && (
                                 <div className="absolute top-3 right-3">
-                                  <span className="inline-block h-4 w-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+                                  <Spinner className="h-4 w-4 text-gray-400" />
                                 </div>
-                              )} */}
+                              )}
 
                               <div className="flex items-start gap-3">
                                 <div className="text-sm font-semibold text-gray-500 dark:text-gray-400 select-none">
@@ -629,9 +674,12 @@ export default function Chapters() {
                                           text: q.text,
                                         })
                                       }
-                                      className="px-3 py-1 bg-red-500 text-white rounded-lg"
+                                      className="px-3 py-1 bg-red-500 text-white rounded-lg inline-flex items-center gap-2"
                                     >
                                       Delete
+                                      {questionBeingDeleted && (
+                                        <Spinner className="h-4 w-4 text-white" />
+                                      )}
                                     </button>
                                   </div>
                                 </div>
@@ -670,9 +718,17 @@ export default function Chapters() {
       {/* ADD / EDIT CHAPTER MODAL */}
       {showChapterModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-[400px] space-y-4">
-            <h3 className="text-lg font-semibold">
+          <div
+            className="bg-white dark:bg-gray-900 p-6 rounded-2xl w-[400px] space-y-4"
+            role="dialog"
+            aria-modal="true"
+            aria-busy={savingChapter}
+          >
+            <h3 className="text-lg font-semibold flex items-center gap-2">
               {editingChapter ? "Edit Chapter" : "Add Chapter"}
+              {savingChapter && (
+                <Spinner className="h-4 w-4 text-[var(--mm-teal)]" />
+              )}
             </h3>
 
             <input
@@ -680,7 +736,8 @@ export default function Chapters() {
               value={chapterTitle}
               onChange={(e) => setChapterTitle(e.target.value)}
               placeholder="Chapter name"
-              className="w-full border rounded-xl p-2"
+              disabled={savingChapter}
+              className="w-full border rounded-xl p-2 disabled:opacity-60"
             />
 
             <input
@@ -690,19 +747,29 @@ export default function Chapters() {
               value={questionPercentage}
               onChange={(e) => setQuestionPercentage(e.target.value)}
               placeholder="Question Percentage (0-100)"
-              className="w-full border rounded-xl p-2"
+              disabled={savingChapter}
+              className="w-full border rounded-xl p-2 disabled:opacity-60"
             />
 
             <button
               onClick={saveChapter}
-              className="w-full py-2 bg-[var(--mm-teal)] text-white rounded-xl"
+              disabled={savingChapter}
+              className="w-full py-2 bg-[var(--mm-teal)] text-white rounded-xl inline-flex items-center justify-center gap-2 disabled:opacity-60"
             >
-              Save
+              {savingChapter ? (
+                <>
+                  <Spinner className="h-5 w-5 text-white" />
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
             </button>
 
             <button
               onClick={() => setShowChapterModal(false)}
-              className="w-full py-2 border rounded-xl"
+              disabled={savingChapter}
+              className="w-full py-2 border rounded-xl disabled:opacity-60"
             >
               Cancel
             </button>
