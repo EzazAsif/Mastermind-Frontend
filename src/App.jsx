@@ -14,6 +14,7 @@ import ViewPdf from "./pages/ViewPdf.jsx";
 import Chapters from "./pages/Chapters.jsx";
 import TakeExam from "./pages/TakeExam.jsx";
 import AddAnnouncement from "./pages/AddAnnouncement.jsx";
+import FirstTimeGuide from "./components/FirstTimeGuide.jsx";
 
 // Components
 import Header from "./components/Header.jsx";
@@ -302,6 +303,8 @@ export default function App() {
           )}
         </AnimatePresence>
         {/* --------------------------------------------------------- */}
+        {/* Onboarding Tour */}
+        <FirstTimeGuide />
       </div>
     </div>
   );
