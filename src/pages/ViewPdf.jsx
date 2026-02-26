@@ -3,20 +3,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Document, Page, pdfjs } from "react-pdf";
 
-// Required to avoid "AnnotationLayer styles not found" warnings
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
-// Enable if you want selectable text (slower on mobile):
 // import "react-pdf/dist/esm/Page/TextLayer.css";
 
-// PDF.js worker from CDN (works in Android Chrome/WebView).
-// If you need offline, self-host and import its URL instead.
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
+function getTouchDist(touches) {
+  if (!touches || touches.length < 2) return null;
+  const [a, b] = touches;
+  const dx = a.clientX - b.clientX;
+  const dy = a.clientY - b.clientY;
+  return Math.hypot(dx, dy);
+}
+
 export default function ViewPdf({ fileName, onBack }) {
-  // fileName is your FULL streaming URL
   const fileUrl = fileName;
 
-  // Slightly larger default on small screens
   const initialZoom =
     typeof window !== "undefined" && window.innerWidth < 640 ? 120 : 100;
 
@@ -26,14 +28,13 @@ export default function ViewPdf({ fileName, onBack }) {
   const [containerWidth, setContainerWidth] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
-  // Page jump UI state (no slider)
   const [pageInput, setPageInput] = useState("1");
 
-  // Observe scroll container width (minus padding)
+  // Resize observer
   const roRef = useRef(null);
   const containerRef = useCallback((node) => {
     if (!node) return;
-    const padding = 32; // matches p-4 below
+    const padding = 32; // p-4
     const update = () => setContainerWidth(node.clientWidth - padding);
     update();
     const ro = new ResizeObserver(() => requestAnimationFrame(update));
@@ -72,10 +73,7 @@ export default function ViewPdf({ fileName, onBack }) {
     });
   };
 
-  // Keep input synced if currentPage changes from other actions
-  useEffect(() => {
-    setPageInput(String(currentPage));
-  }, [currentPage]);
+  useEffect(() => setPageInput(String(currentPage)), [currentPage]);
 
   const clampPage = useCallback(
     (v) => {
@@ -94,8 +92,8 @@ export default function ViewPdf({ fileName, onBack }) {
   }, [clampPage, pageInput]);
 
   // Width logic:
-  // - zoom ≤ 100: fit-to-width (avoids tiny centered block)
-  // - zoom > 100: exceed container width to enable horizontal scroll
+  // - zoom ≤ 100: fit-to-width
+  // - zoom > 100: allow width > container => horizontal scroll
   const computedPageWidth = useMemo(() => {
     if (!containerWidth) return undefined;
     if (zoom <= 100) return Math.floor(containerWidth);
@@ -103,6 +101,51 @@ export default function ViewPdf({ fileName, onBack }) {
   }, [containerWidth, zoom]);
 
   const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
+
+  // ---------------------------
+  // Pinch-to-zoom (manual fallback)
+  // ---------------------------
+  const isPinchingRef = useRef(false);
+  const startDistRef = useRef(null);
+  const startZoomRef = useRef(100);
+
+  const onTouchStart = useCallback(
+    (e) => {
+      if (e.touches?.length === 2) {
+        isPinchingRef.current = true;
+        startDistRef.current = getTouchDist(e.touches);
+        startZoomRef.current = zoom;
+        // Don’t preventDefault here; allow browser native pinch where supported.
+      }
+    },
+    [zoom],
+  );
+
+  const onTouchMove = useCallback((e) => {
+    if (!isPinchingRef.current) return;
+    if (e.touches?.length !== 2) return;
+
+    const dist = getTouchDist(e.touches);
+    const startDist = startDistRef.current;
+    if (!dist || !startDist) return;
+
+    // ratio-based zoom: newZoom = startZoom * (dist / startDist)
+    const ratio = dist / startDist;
+    const nextZoom = Math.max(50, Math.min(300, Math.round(startZoomRef.current * ratio)));
+
+    setZoom(nextZoom);
+
+    // In some Android WebViews, native pinch won’t work with custom handlers.
+    // Prevent default to avoid scroll-jank while pinching.
+    e.preventDefault?.();
+  }, []);
+
+  const onTouchEnd = useCallback((e) => {
+    if (e.touches?.length < 2) {
+      isPinchingRef.current = false;
+      startDistRef.current = null;
+    }
+  }, []);
 
   if (!fileUrl) {
     return (
@@ -122,7 +165,7 @@ export default function ViewPdf({ fileName, onBack }) {
 
   return (
     <section className="space-y-4">
-      {/* Header with Back, Pager, Zoom */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {onBack && (
@@ -136,7 +179,7 @@ export default function ViewPdf({ fileName, onBack }) {
           <h2 className="text-xl lg:text-2xl font-semibold">PDF Viewer</h2>
         </div>
 
-        {/* Page navigation (no slider) */}
+        {/* Page nav */}
         <div className="flex items-center gap-2">
           <button
             onClick={prevPage}
@@ -158,7 +201,6 @@ export default function ViewPdf({ fileName, onBack }) {
             <input
               value={pageInput}
               onChange={(e) => {
-                // allow only digits (and empty while typing)
                 const v = e.target.value.replace(/[^\d]/g, "");
                 setPageInput(v);
               }}
@@ -190,6 +232,7 @@ export default function ViewPdf({ fileName, onBack }) {
           </button>
         </div>
 
+        {/* Zoom buttons */}
         <div className="flex items-center gap-2">
           <button
             onClick={zoomOut}
@@ -227,10 +270,16 @@ export default function ViewPdf({ fileName, onBack }) {
           overflowX: "auto",
           overflowY: "auto",
           WebkitOverflowScrolling: "touch",
-          // Allow horizontal and vertical panning on mobile
-          touchAction: "pan-x pan-y",
+
+          // ✅ Allow browser pinch zoom + panning
+          // Your previous "pan-x pan-y" blocks pinch on many browsers.
+          touchAction: "pinch-zoom",
         }}
         ref={containerRef}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
       >
         <div className="p-4">
           <Document
@@ -249,7 +298,6 @@ export default function ViewPdf({ fileName, onBack }) {
               </div>
             }
           >
-            {/* Single page */}
             <div
               className="inline-block align-top"
               style={{
@@ -259,22 +307,22 @@ export default function ViewPdf({ fileName, onBack }) {
               <Page
                 pageNumber={currentPage}
                 width={computedPageWidth}
-                renderTextLayer={false} // perf: off unless needed
-                renderAnnotationLayer={true} // needs AnnotationLayer.css (imported)
+                renderTextLayer={false}
+                renderAnnotationLayer={true}
               />
             </div>
           </Document>
         </div>
       </motion.div>
 
-      {/* CSS OVERRIDES: allow width > container for horizontal scroll */}
+      {/* CSS OVERRIDES */}
       <style jsx global>{`
         .react-pdf__Page {
           max-width: none !important;
         }
         .react-pdf__Page__canvas {
           max-width: none !important;
-          width: 100% !important; /* the wrapper decides width */
+          width: 100% !important;
           height: auto !important;
           display: block;
         }
