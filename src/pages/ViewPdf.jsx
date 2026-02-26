@@ -26,6 +26,9 @@ export default function ViewPdf({ fileName, onBack }) {
   const [containerWidth, setContainerWidth] = useState(null);
   const [loadError, setLoadError] = useState(null);
 
+  // Page jump UI state (no slider)
+  const [pageInput, setPageInput] = useState("1");
+
   // Observe scroll container width (minus padding)
   const roRef = useRef(null);
   const containerRef = useCallback((node) => {
@@ -42,6 +45,7 @@ export default function ViewPdf({ fileName, onBack }) {
   const onDocumentLoadSuccess = ({ numPages: n }) => {
     setNumPages(n);
     setCurrentPage(1);
+    setPageInput("1");
     setLoadError(null);
   };
   const onDocumentLoadError = (err) => {
@@ -53,8 +57,41 @@ export default function ViewPdf({ fileName, onBack }) {
   const zoomOut = () => setZoom((z) => Math.max(z - 10, 50));
   const resetZoom = () => setZoom(100);
 
-  const prevPage = () => setCurrentPage((p) => Math.max(1, p - 1));
-  const nextPage = () => setCurrentPage((p) => Math.min(numPages || 1, p + 1));
+  const prevPage = () => {
+    setCurrentPage((p) => {
+      const next = Math.max(1, p - 1);
+      setPageInput(String(next));
+      return next;
+    });
+  };
+  const nextPage = () => {
+    setCurrentPage((p) => {
+      const next = Math.min(numPages || 1, p + 1);
+      setPageInput(String(next));
+      return next;
+    });
+  };
+
+  // Keep input synced if currentPage changes from other actions
+  useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
+
+  const clampPage = useCallback(
+    (v) => {
+      const n = Number(v);
+      if (!Number.isFinite(n)) return 1;
+      const max = numPages || 1;
+      return Math.min(Math.max(1, Math.trunc(n)), max);
+    },
+    [numPages],
+  );
+
+  const goToPage = useCallback(() => {
+    const target = clampPage(pageInput);
+    setCurrentPage(target);
+    setPageInput(String(target));
+  }, [clampPage, pageInput]);
 
   // Width logic:
   // - zoom ≤ 100: fit-to-width (avoids tiny centered block)
@@ -99,6 +136,7 @@ export default function ViewPdf({ fileName, onBack }) {
           <h2 className="text-xl lg:text-2xl font-semibold">PDF Viewer</h2>
         </div>
 
+        {/* Page navigation (no slider) */}
         <div className="flex items-center gap-2">
           <button
             onClick={prevPage}
@@ -108,9 +146,40 @@ export default function ViewPdf({ fileName, onBack }) {
           >
             ◀
           </button>
-          <span className="text-sm font-medium">
-            {currentPage}/{numPages ?? "—"}
-          </span>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              goToPage();
+            }}
+            className="flex items-center gap-2"
+          >
+            <span className="text-sm font-medium">Page</span>
+            <input
+              value={pageInput}
+              onChange={(e) => {
+                // allow only digits (and empty while typing)
+                const v = e.target.value.replace(/[^\d]/g, "");
+                setPageInput(v);
+              }}
+              onBlur={goToPage}
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className="w-16 px-2 py-1 border rounded-lg text-sm text-center bg-white dark:bg-gray-900"
+              aria-label="Page number"
+            />
+            <span className="text-sm font-medium">/ {numPages ?? "—"}</span>
+            <button
+              type="submit"
+              disabled={!numPages}
+              className="px-3 py-1 border rounded-lg disabled:opacity-50 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              aria-label="Go to page"
+              title="Go"
+            >
+              Go
+            </button>
+          </form>
+
           <button
             onClick={nextPage}
             disabled={!numPages || currentPage >= (numPages || 1)}

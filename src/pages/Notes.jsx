@@ -1,43 +1,34 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import { onAuthStateChanged } from "firebase/auth";
-import { auth } from "../lib/firebase";
+import axios from "axios";
+
+// Modals
+import AuthModal from "../components/AuthModal.jsx";
+import ValidationModal from "../components/ValidationModal.jsx";
 
 /**
  * Create a per-session stable key for objects that may not have a stable id.
- * - Prefer backend ids (_id, id, fileId).
- * - Then try a composite from immutable backend fields.
- * - Finally, assign an incrementing session id stored in a WeakMap (stable for the same object instance).
  */
 function createStableKeyFactory() {
   const wm = new WeakMap();
   let counter = 0;
 
   return function getStableKey(note) {
-    // 1) Prefer true IDs that come from the backend and won't change
     if (note?._id) return String(note._id);
     if (note?.id) return String(note.id);
     if (note?.fileId) return String(note.fileId);
 
-    // 2) Composite keys from immutable fields
     if (note?.fileName && note?.originalName) {
       return `file:${note.fileName}|orig:${note.originalName}`;
     }
-    if (note?.fileName) {
-      return `file:${note.fileName}`;
-    }
+    if (note?.fileName) return `file:${note.fileName}`;
 
-    // 3) Session-stable fallback via WeakMap (last resort)
-    if (!wm.has(note)) {
-      wm.set(note, `session-${++counter}`);
-    }
+    if (!wm.has(note)) wm.set(note, `session-${++counter}`);
     return wm.get(note);
   };
 }
-
 const getStableKey = createStableKeyFactory();
 
-/** Robust date conversion (supports Firestore Timestamp / {seconds} / string / Date) */
 function safeToDate(input, fallback = new Date(0)) {
   try {
     if (!input) return fallback;
@@ -69,93 +60,129 @@ function safeToLocaleDateString(input, locale) {
   }
 }
 
-export default function Notes({ openPdf, locale }) {
+export default function Notes({ openPdf, currentUser, locale }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const baseApi =
+  // dbUser like Header (contains is_validated, request_sent etc.)
+  const [dbUser, setDbUser] = useState(null);
+
+  // local modals (no parent props needed)
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [validationOpen, setValidationOpen] = useState(false);
+
+  const API_BASE =
     import.meta.env.VITE_API_URL ||
     "https://ugliest-hannie-ezaz-307892de.koyeb.app";
 
-  // Fetch notes once we know the current firebaseUser (or guest)
-  const fetchNotes = useCallback(
-    async (firebaseUser, signal) => {
-      setLoading(true);
-      setError("");
+  // Fetch notes (must return both free + premium)
+  const fetchNotes = useCallback(async () => {
+    setLoading(true);
+    setError("");
 
-      try {
-        const params = new URLSearchParams();
-        // Optional: add a limit if your backend supports it
-        params.set("limit", "30");
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "60");
 
-        let headers = {};
-        if (firebaseUser) {
-          params.set("uid", firebaseUser.uid);
-          try {
-            // Attach ID token if your API requires auth for user-specific notes
-            const token = await firebaseUser.getIdToken();
-            if (token) {
-              headers = { Authorization: `Bearer ${token}` };
-            }
-          } catch (e) {
-            console.warn("Failed to get ID token (continuing without):", e);
-          }
-        }
+      // if you want the backend to know who is requesting:
+      if (currentUser?.uid) params.set("uid", currentUser.uid);
 
-        const url = `${baseApi}/api/notes?${params.toString()}`;
-        const res = await fetch(url, { headers, signal });
+      const res = await fetch(`${API_BASE}/api/notes?${params.toString()}`);
 
-        if (!res.ok) {
-          let message = `Failed to fetch notes (${res.status})`;
-          try {
-            const data = await res.json();
-            if (data?.message) message = data.message;
-          } catch {}
-          throw new Error(message);
-        }
-
-        const data = await res.json();
-        setNotes(Array.isArray(data) ? data : []);
-      } catch (e) {
-        if (e.name === "AbortError") return; // cancelled
-        console.error("Notes fetch error:", e);
-        setError(e.message || "Something went wrong.");
-        setNotes([]);
-      } finally {
-        setLoading(false);
+      if (!res.ok) {
+        let message = `Failed to fetch notes (${res.status})`;
+        try {
+          const data = await res.json();
+          if (data?.message) message = data.message;
+        } catch {}
+        throw new Error(message);
       }
-    },
-    [baseApi],
-  );
 
-  // Avoid Strict Mode double-run races with AbortController
-  useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
+      const data = await res.json();
+      setNotes(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Notes fetch error:", e);
+      setError(e.message || "Something went wrong.");
+      setNotes([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [API_BASE, currentUser?.uid]);
 
-    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
-      // Let the API decide visibility:
-      // - validated user -> user notes
-      // - not validated/guest -> public notes
-      fetchNotes(firebaseUser, signal);
-    });
+  // Fetch dbUser (same as Header)
+  const fetchDbUser = useCallback(async () => {
+    if (!currentUser?.uid) {
+      setDbUser(null);
+      return;
+    }
 
-    return () => {
-      controller.abort();
+    try {
+      let headers = {};
       try {
-        unsub && unsub();
-      } catch {}
-    };
+        const token = await currentUser.getIdToken?.();
+        if (token) headers.Authorization = `Bearer ${token}`;
+      } catch {
+        // optional
+      }
+
+      const res = await axios.get(`${API_BASE}/api/users/${currentUser.uid}`, {
+        headers,
+        timeout: 12000,
+      });
+
+      setDbUser(res?.data || null);
+    } catch (err) {
+      console.error("Failed to fetch DB user (Notes):", err);
+      setDbUser(null);
+    }
+  }, [API_BASE, currentUser?.uid]);
+
+  useEffect(() => {
+    fetchNotes();
   }, [fetchNotes]);
 
-  // Normalize notes once per render and attach a stable key
+  useEffect(() => {
+    fetchDbUser();
+  }, [fetchDbUser]);
+
   const normalizedNotes = useMemo(() => {
-    return notes.map((n) => ({
-      ...n,
-      stableKey: getStableKey(n),
-    }));
+    return notes.map((n) => ({ ...n, stableKey: getStableKey(n) }));
   }, [notes]);
+
+  const isValidated = !!dbUser?.is_validated;
+
+  const handleNoteClick = useCallback(
+    (note) => {
+      const hasUrl = !!note?.downloadURL;
+      if (!hasUrl) return;
+
+      const isFree = !!note?.isPublic; // your backend field
+
+      // ✅ Free opens always
+      if (isFree) {
+        openPdf?.(note.downloadURL);
+        return;
+      }
+
+      // 🔒 Premium gating
+      if (!currentUser) {
+        // not logged in
+        setLoginOpen(true);
+        return;
+      }
+
+      if (!isValidated) {
+        // logged in but not validated
+        setValidationOpen(true);
+        return;
+      }
+
+      // validated
+      openPdf?.(note.downloadURL);
+    },
+    [openPdf, currentUser, isValidated],
+  );
 
   if (loading) return <p className="text-center mt-4">Loading notes...</p>;
   if (error) return <p className="text-center mt-4 text-red-500">{error}</p>;
@@ -163,46 +190,88 @@ export default function Notes({ openPdf, locale }) {
     return <p className="text-center mt-4">No notes available.</p>;
 
   return (
-    <section className="space-y-6">
-      <h2 className="text-xl lg:text-2xl font-semibold">My Notes</h2>
+    <>
+      <section className="space-y-6">
+        <h2 className="text-xl lg:text-2xl font-semibold">My Notes</h2>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {normalizedNotes.map((note) => {
-          const hasUrl = !!note.downloadURL;
-          return (
-            <motion.div
-              key={note.stableKey}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25 }}
-              className={`rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 shadow-soft transition group ${
-                hasUrl
-                  ? "hover:shadow-lg cursor-pointer"
-                  : "opacity-80 cursor-not-allowed"
-              }`}
-              onClick={() => hasUrl && openPdf && openPdf(note.downloadURL)}
-              title={hasUrl ? "Open PDF" : "No file URL available"}
-            >
-              <div className="flex items-start justify-between">
-                <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
-                  📄
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {normalizedNotes.map((note) => {
+            const hasUrl = !!note.downloadURL;
+            const isFree = !!note.isPublic;
+
+            return (
+              <motion.div
+                key={note.stableKey}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                className={`rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 shadow-soft transition group ${
+                  hasUrl
+                    ? "hover:shadow-lg cursor-pointer"
+                    : "opacity-80 cursor-not-allowed"
+                }`}
+                onClick={() => hasUrl && handleNoteClick(note)}
+                title={
+                  !hasUrl
+                    ? "No file URL available"
+                    : isFree
+                      ? "Open (Free)"
+                      : "Open (Premium)"
+                }
+              >
+                <div className="flex items-start justify-between">
+                  <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
+                    📄
+                  </div>
+
+                  {/* Free/Premium label */}
+                  <div
+                    className={`text-xs font-medium px-2 py-1 rounded-full ${
+                      isFree
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                    }`}
+                  >
+                    {isFree ? "Free" : "Premium"}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {note.isPublic ? "🌍 Public" : "🔒 Private"}
-                </div>
-              </div>
 
-              <h3 className="mt-4 font-medium text-sm lg:text-base group-hover:text-[var(--mm-teal)] transition">
-                {note.noteName || note.originalName || "Untitled"}
-              </h3>
+                <h3 className="mt-4 font-medium text-sm lg:text-base group-hover:text-[var(--mm-teal)] transition">
+                  {note.noteName || note.originalName || "Untitled"}
+                </h3>
 
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                Uploaded on {safeToLocaleDateString(note.createdAt, locale)}
-              </p>
-            </motion.div>
-          );
-        })}
-      </div>
-    </section>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  Uploaded on {safeToLocaleDateString(note.createdAt, locale)}
+                </p>
+
+                {!isFree ? (
+                  <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                    {!currentUser
+                      ? "Tap to log in"
+                      : !isValidated
+                        ? "Tap to validate"
+                        : "Tap to open"}
+                  </p>
+                ) : null}
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ✅ Login modal (same UI style as your app) */}
+      <AuthModal open={loginOpen} onClose={() => setLoginOpen(false)} />
+
+      {/* ✅ Validation modal (same component you already have) */}
+      <ValidationModal
+        isOpen={validationOpen}
+        onClose={() => setValidationOpen(false)}
+        onSuccess={() => {
+          // refresh validation state after submitting
+          setValidationOpen(false);
+          fetchDbUser();
+        }}
+      />
+    </>
   );
 }
