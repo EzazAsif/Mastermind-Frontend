@@ -17,8 +17,7 @@ export default function ViewPdf({ fileName, onBack }) {
   const fileUrl = fileName;
 
   // Slightly larger default on small screens
-  const initialZoom =
-    typeof window !== "undefined" && window.innerWidth < 640 ? 120 : 100;
+  const initialZoom = 250;
 
   const [zoom, setZoom] = useState(initialZoom); // 50–300%
   const [numPages, setNumPages] = useState(null);
