@@ -533,19 +533,6 @@ function ProfileModal({
               />
             </div>
 
-            {/* Avatar */}
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Profile Photo (optional)
-              </label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
-                className="block w-full text-sm"
-              />
-            </div>
-
             <div className="mt-4 flex items-center justify-end gap-2">
               <button
                 type="button"
