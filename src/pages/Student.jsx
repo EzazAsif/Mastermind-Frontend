@@ -688,9 +688,6 @@ export default function Student({ onOpenAuth, setRoute }) {
                 <span className="truncate mr-3">
                   {n.noteName || n.originalName}
                 </span>
-                <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                  {safeToLocaleDateString(n.createdAt)}
-                </span>
               </li>
             ))
           ) : (

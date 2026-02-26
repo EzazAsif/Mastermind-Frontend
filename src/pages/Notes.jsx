@@ -240,10 +240,6 @@ export default function Notes({ openPdf, currentUser, locale }) {
                   {note.noteName || note.originalName || "Untitled"}
                 </h3>
 
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Uploaded on {safeToLocaleDateString(note.createdAt, locale)}
-                </p>
-
                 {!isFree ? (
                   <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
                     {!currentUser
