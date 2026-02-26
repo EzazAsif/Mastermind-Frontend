@@ -487,6 +487,7 @@ function ProfileModal({
                 Phone Number
               </label>
               <input
+                required
                 type="tel"
                 inputMode="tel"
                 value={phone}
@@ -503,6 +504,7 @@ function ProfileModal({
             <div>
               <label className="mb-1 block text-sm font-medium">Board</label>
               <select
+                required
                 value={board}
                 onChange={(e) => setBoard(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-gray-700 dark:bg-gray-800"
@@ -530,6 +532,7 @@ function ProfileModal({
                 onChange={(e) => setYear(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-gray-700 dark:bg-gray-800"
                 placeholder={`${new Date().getFullYear()}`}
+                required
               />
             </div>
 

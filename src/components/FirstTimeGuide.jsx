@@ -10,7 +10,7 @@ export default function FirstTimeGuide({
         type: "welcome",
         title: "Welcome to ICT Master Mind",
         text: "Welcome to ICT Master Mind. You can get access to notes for HSC preparation and take mock exams for practice.",
-        img: "/mastermind-logo.png", // from /public
+        img: "/ictbanner.jpg", // from /public
       },
       {
         type: "social",
