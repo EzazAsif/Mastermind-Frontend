@@ -1,4 +1,3 @@
-// Student.jsx
 import { useEffect, useState, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
@@ -78,26 +77,6 @@ function loadImage(src) {
   });
 }
 
-/** Detect missing required profile fields from backend user */
-function getMissingProfileFields(dbUser) {
-  const missing = [];
-
-  const board = typeof dbUser?.Board === "string" ? dbUser.Board.trim() : "";
-  const year =
-    dbUser?.ExamYEar !== undefined && dbUser?.ExamYEar !== null
-      ? String(dbUser.ExamYEar).trim()
-      : "";
-
-  // IMPORTANT: adjust this field name if your backend uses Phone/phoneNumber/etc.
-  const phone = typeof dbUser?.phone === "string" ? dbUser.phone.trim() : "";
-
-  if (!board) missing.push("Board");
-  if (!year) missing.push("Exam Year");
-  if (!phone) missing.push("Phone Number");
-
-  return missing;
-}
-
 export default function Student({ onOpenAuth, setRoute }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(demo);
@@ -111,13 +90,8 @@ export default function Student({ onOpenAuth, setRoute }) {
 
   const [downloading, setDownloading] = useState(false);
 
-  // backend validation flag
+  // NEW: backend validation flag
   const [isValidated, setIsValidated] = useState(false);
-
-  // === NEW: profile completion modal state ===
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [missingFields, setMissingFields] = useState([]);
-  const profileModalShownRef = useRef(false);
 
   const mountedRef = useRef(true);
 
@@ -140,7 +114,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         (...args) => {
           if (mountedRef.current) setter(...args);
         };
-
       const setLoadingSafe = safeSet(setLoading);
       const setLatestNotesSafe = safeSet(setLatestNotes);
       const setLatestAnnouncementsSafe = safeSet(setLatestAnnouncements);
@@ -150,16 +123,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       const setExamYearSafe = safeSet(setExamYear);
       const setIsValidatedSafe = safeSet(setIsValidated);
 
-      // modal safe setters
-      const setShowProfileModalSafe = safeSet(setShowProfileModal);
-      const setMissingFieldsSafe = safeSet(setMissingFields);
-
       if (!user) {
-        // reset modal "shown" for guests
-        profileModalShownRef.current = false;
-        setShowProfileModalSafe(false);
-        setMissingFieldsSafe([]);
-
         // Guest: public latest notes + announcements only
         try {
           setLoadingSafe(true);
@@ -223,7 +187,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       try {
         setLoadingSafe(true);
 
-        // 1) Fetch backend user → last_score, displayName, Board, ExamYEar, is_validated, phone etc.
+        // 1) Fetch backend user → last_score, displayName, Board, ExamYEar, is_validated
         const res = await fetch(`${baseUrl}/api/users/${user.uid}`);
         if (res.ok) {
           const dbUser = await res.json();
@@ -236,6 +200,7 @@ export default function Student({ onOpenAuth, setRoute }) {
           );
           setExamYearSafe(dbUser?.ExamYEar ? String(dbUser?.ExamYEar) : "—");
 
+          // NEW: set validation flag
           setIsValidatedSafe(Boolean(dbUser?.is_validated));
 
           setDataSafe((prev) => ({
@@ -245,14 +210,6 @@ export default function Student({ onOpenAuth, setRoute }) {
               name: dbUser?.displayName || user.displayName || "Student",
             },
           }));
-
-          // === NEW: if board/year/phone missing => popup modal (only once per mount) ===
-          const missing = getMissingProfileFields(dbUser);
-          if (missing.length > 0 && !profileModalShownRef.current) {
-            profileModalShownRef.current = true;
-            setMissingFieldsSafe(missing);
-            setShowProfileModalSafe(true);
-          }
         } else {
           setBoardSafe("—");
           setExamYearSafe("—");
@@ -322,28 +279,30 @@ export default function Student({ onOpenAuth, setRoute }) {
     [latestAnnouncements],
   );
 
-  // === HSC-style Certificate ===
+  // === HSC-style Certificate, website-issued, no gibberish, hide empty fields, no QR, wrapped header ===
   async function handleDownloadCertificate() {
     try {
       setDownloading(true);
 
+      // ---- Inputs from your state / backend ----
       const studentName = (data?.student?.name || "Student").trim();
       const mark = Number(lastScore) || 0;
       const grade = getGrade(mark);
 
-      const boardNameEn = (board || "").trim();
-      const examYearStr = String(examYear || "").trim();
+      const boardNameEn = (board || "").trim(); // e.g., "Jessore"
+      const examYearStr = String(examYear || "").trim(); // e.g., "2025"
       const examTitle = "Higher Secondary Certificate (HSC)";
       const subjectTitle = "ICT MCQ Assessment";
 
-      // OPTIONAL fields — hidden when empty
-      const rollNo = undefined;
-      const regNo = undefined;
-      const centerName = undefined;
+      // OPTIONAL fields — if empty/undefined, they will be hidden
+      const rollNo = undefined; // e.g., dbUser.rollNo
+      const regNo = undefined; // e.g., dbUser.regNo
+      const centerName = undefined; // e.g., dbUser.center
       const sessionStr = examYearStr
         ? `${Number(examYearStr) - 1}-${examYearStr}`
         : undefined;
 
+      // ---- Design Palette ----
       const TEAL = [0, 121, 107];
       const GOLD = [191, 144, 0];
       const DARK = [34, 34, 34];
@@ -351,16 +310,19 @@ export default function Student({ onOpenAuth, setRoute }) {
       const LIGHT = [242, 244, 247];
       const BORDER = [220, 223, 230];
 
+      // ---- Create doc ----
       const doc = new jsPDF({ unit: "pt", format: "A4" });
       const W = doc.internal.pageSize.getWidth();
       const H = doc.internal.pageSize.getHeight();
 
+      // ---- Page Border ----
       doc.setDrawColor(...BORDER);
       doc.setLineWidth(1.2);
       doc.rect(24, 24, W - 48, H - 48);
       doc.setDrawColor(...BORDER);
       doc.rect(36, 36, W - 72, H - 72);
 
+      // ---- Header Band with logo ----
       const bandH = 88;
       const bandX = 36;
       const bandY = 36;
@@ -368,6 +330,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setFillColor(...LIGHT);
       doc.rect(bandX, bandY, bandW, bandH, "F");
 
+      // Logo
       const logoX = 52;
       const logoY = 46;
       const logoSize = 64;
@@ -386,15 +349,18 @@ export default function Student({ onOpenAuth, setRoute }) {
         });
       }
 
+      // Header text — WEBSITE, not Board
       const headerLeft = logoX + logoSize + 20;
-      const headerRightMargin = 24;
-      const headerMaxWidth = W - headerLeft - headerRightMargin - 36;
+      const headerRightMargin = 24; // safe padding to the right edge
+      const headerMaxWidth = W - headerLeft - headerRightMargin - 36; // inside inner border
 
+      // Title line
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(15);
       doc.text("Mastermind (Website)", headerLeft, 65);
 
+      // Subtitle line (wrapped to avoid overflow)
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(12);
@@ -403,6 +369,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       const subtitleLines = doc.splitTextToSize(subtitle, headerMaxWidth);
       doc.text(subtitleLines, headerLeft, 85);
 
+      // ---- Certificate Title ----
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(22);
@@ -420,6 +387,7 @@ export default function Student({ onOpenAuth, setRoute }) {
         { align: "center" },
       );
 
+      // ---- Serial Row (left only; QR removed) ----
       const infoX = 52;
       const infoY = 210;
       doc.setFont("helvetica", "normal");
@@ -428,6 +396,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       const serialNo = "MM-HSC-" + String(Date.now()).slice(-8);
       doc.text(`Serial No.: ${serialNo}`, infoX, infoY);
 
+      // ---- Formal Statement ----
       const stmtX = 52;
       const stmtY = 250;
       const stmtW = W - 104;
@@ -441,6 +410,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       const linesEn = doc.splitTextToSize(statementEn, stmtW);
       doc.text(linesEn, stmtX, stmtY);
 
+      // ---- Details Card ----
       const cardX = 52;
       const cardY = stmtY + 48;
       const cardW = W - 104;
@@ -450,6 +420,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setLineWidth(1);
       doc.roundedRect(cardX, cardY, cardW, cardH, 10, 10, "S");
 
+      // Title strip
       doc.setFillColor(...TEAL);
       doc.roundedRect(cardX, cardY, 200, 26, 10, 10, "F");
       doc.setFont("helvetica", "bold");
@@ -457,15 +428,16 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setFontSize(12);
       doc.text("Candidate Details & Result", cardX + 12, cardY + 17);
 
+      // Helpers
       const leftX = cardX + 16;
       const rightX = cardX + cardW / 2 + 8;
       let y = cardY + 54;
       const rowGap = 42;
 
       const addField = (label, value, x, yPos) => {
-        if (value === undefined || value === null) return yPos;
+        if (value === undefined || value === null) return yPos; // hide
         const str = String(value).trim();
-        if (!str) return yPos;
+        if (!str) return yPos; // hide empty/whitespace
         doc.setFont("helvetica", "normal");
         doc.setTextColor(...GREY);
         doc.setFontSize(11);
@@ -477,17 +449,20 @@ export default function Student({ onOpenAuth, setRoute }) {
         return yPos + rowGap;
       };
 
+      // Left column (conditionally show)
       y = addField("Candidate Name", studentName, leftX, y);
       y = addField("Roll No.", rollNo, leftX, y);
       y = addField("Registration No.", regNo, leftX, y);
       y = addField("Session", sessionStr, leftX, y);
 
+      // Right column (conditionally show)
       let ry = cardY + 54;
       ry = addField("Board", boardNameEn || undefined, rightX, ry);
       ry = addField("Exam Year", examYearStr || undefined, rightX, ry);
       ry = addField("Exam", examTitle, rightX, ry);
       ry = addField("Exam Centre", centerName, rightX, ry);
 
+      // Divider Line
       doc.setDrawColor(...BORDER);
       doc.setLineWidth(0.8);
       doc.line(
@@ -497,12 +472,14 @@ export default function Student({ onOpenAuth, setRoute }) {
         cardY + cardH - 84,
       );
 
+      // Result Row
       const rY = cardY + cardH - 58;
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(12);
       doc.text("Result (Grade):", cardX + 16, rY);
 
+      // Grade badge
       const gradeText = grade;
       const badgePaddingX = 10;
       const textW = doc.getTextWidth(gradeText) + badgePaddingX * 2;
@@ -514,12 +491,14 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setFontSize(11);
       doc.text(gradeText, badgeX + badgePaddingX, rY + 2);
 
+      // Percentage
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(12);
       doc.text("Score (%):", rightX, rY);
       doc.text(String(mark), rightX + 80, rY);
 
+      // Issue Date
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(10);
@@ -529,6 +508,7 @@ export default function Student({ onOpenAuth, setRoute }) {
         cardY + cardH - 16,
       );
 
+      // ---- Signatures ----
       const sigY = cardY + cardH + 72;
       const sigBoxW = 180;
       const leftSigX = 52;
@@ -552,6 +532,7 @@ export default function Student({ onOpenAuth, setRoute }) {
         "(Authorized Signature)",
       );
 
+      // ---- Footer note (explicit website issuance) ----
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(9);
@@ -573,6 +554,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       setDownloading(false);
     }
   }
+  ``;
 
   if (loading) {
     return (
@@ -588,44 +570,6 @@ export default function Student({ onOpenAuth, setRoute }) {
 
   return (
     <div className="space-y-4">
-      {/* === NEW: Profile completion modal === */}
-      {showProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-xl2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-soft p-5">
-            <h3 className="text-lg font-semibold">Complete your profile</h3>
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              Please add the following details:
-            </p>
-
-            <ul className="mt-3 list-disc pl-5 text-sm text-gray-700 dark:text-gray-200">
-              {missingFields.map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-
-            <div className="mt-5 flex gap-2 justify-end">
-              <button
-                onClick={() => setShowProfileModal(false)}
-                className="rounded-xl border border-gray-200 dark:border-gray-800 px-4 py-2 text-sm"
-              >
-                Later
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowProfileModal(false);
-                  // Change this to your actual profile route / modal opener
-                  setRoute?.("Profile");
-                }}
-                className="rounded-xl bg-[var(--mm-teal)] text-white px-4 py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)]"
-              >
-                Update now
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Hero */}
       <StudentWelcome student={student} onOpenAuth={onOpenAuth} />
 
@@ -647,6 +591,7 @@ export default function Student({ onOpenAuth, setRoute }) {
           >
             Continue MCQs
           </button>
+          {/* Made teal to match your theme */}
           <button
             onClick={() => setRoute("Notes")}
             className="rounded-xl bg-[var(--mm-teal)] text-white py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)] active:translate-y-px transition"
@@ -695,6 +640,7 @@ export default function Student({ onOpenAuth, setRoute }) {
                 Your most recent MCQ performance.
               </p>
 
+              {/* Download button INSIDE the mark card */}
               <div className="mt-3 flex flex-wrap gap-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   Board:{" "}

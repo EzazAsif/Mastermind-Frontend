@@ -1,6 +1,5 @@
 // src/components/StudentWelcome.jsx
-
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { getAuth, onAuthStateChanged, updateProfile } from "firebase/auth";
 import {
@@ -33,13 +32,12 @@ export const BD_EXAM_BOARDS = [
 function useAsyncImage(url, version) {
   const [state, setState] = useState({
     loadedUrl: "",
-    status: "idle", // 'idle' | 'loading' | 'loaded' | 'error' | 'empty'
+    status: "idle",
   });
 
   useEffect(() => {
     let cancelled = false;
 
-    // Empty URL → show fallback
     if (!url) {
       setState({ loadedUrl: "", status: "empty" });
       return () => {
@@ -47,7 +45,6 @@ function useAsyncImage(url, version) {
       };
     }
 
-    // Cache-bust to avoid stale images after updates
     const cacheBusted = version
       ? `${url}${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(
           String(version),
@@ -64,23 +61,17 @@ function useAsyncImage(url, version) {
         img.src = cacheBusted;
 
         if (img.decode) {
-          // Modern browsers support HTMLImageElement.decode()
           await img.decode();
         } else {
-          // Fallback for older browsers
           await new Promise((resolve, reject) => {
             img.onload = () => resolve();
             img.onerror = (e) => reject(e);
           });
         }
 
-        if (!cancelled) {
-          setState({ loadedUrl: cacheBusted, status: "loaded" });
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setState({ loadedUrl: "", status: "error" });
-        }
+        if (!cancelled) setState({ loadedUrl: cacheBusted, status: "loaded" });
+      } catch {
+        if (!cancelled) setState({ loadedUrl: "", status: "error" });
       }
     })();
 
@@ -107,14 +98,12 @@ function Avatar({ url, initial, size = 40, version }) {
         style={{ width: size, height: size }}
         referrerPolicy="no-referrer"
         onError={(e) => {
-          // Final UI fallback if a later error occurs (rare)
           e.currentTarget.style.display = "none";
         }}
       />
     );
   }
 
-  // While loading or on error/empty, show initials
   return (
     <div
       className="rounded-full bg-[var(--mm-teal)] text-white grid place-items-center font-semibold"
@@ -134,60 +123,121 @@ function Avatar({ url, initial, size = 40, version }) {
 }
 
 /* -----------------------------------------
+   Helpers
+------------------------------------------ */
+function isProfileIncomplete(u) {
+  if (!u) return false;
+  const boardMissing =
+    !u.Board || String(u.Board).trim() === "" || u.Board === "none";
+  const yearMissing = !u.ExamYEar || Number(u.ExamYEar) === 0;
+  const phoneMissing =
+    !u.phone ||
+    String(u.phone).trim() === "" ||
+    String(u.phone).toLowerCase() === "none";
+  return boardMissing || yearMissing || phoneMissing;
+}
+
+/** Normalize + validate BD phone */
+function normalizeBdPhone(input) {
+  const raw = String(input || "").trim();
+  if (!raw) return { ok: true, value: "none" };
+
+  let p = raw.replace(/[^\d+]/g, "");
+  if (p.startsWith("8801") && !p.startsWith("+")) p = "+" + p;
+  if (p.startsWith("01")) p = "+88" + p;
+
+  // allow "none"
+  if (p.toLowerCase() === "none") return { ok: true, value: "none" };
+
+  const ok = /^\+8801\d{9}$/.test(p);
+  if (!ok) {
+    return {
+      ok: false,
+      value: p,
+      message: "Invalid phone. Use 01XXXXXXXXX or +8801XXXXXXXXX.",
+    };
+  }
+  return { ok: true, value: p };
+}
+
+/* -----------------------------------------
    StudentWelcome
 ------------------------------------------ */
 export default function StudentWelcome({ student, onOpenAuth }) {
   const auth = getAuth();
+
   const [currentUser, setCurrentUser] = useState(null);
+
+  // Backend user (Board/ExamYEar/phone)
+  const [dbUser, setDbUser] = useState(null);
+  const [loadingDb, setLoadingDb] = useState(false);
 
   // Profile modal open/close
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  // Backend user (Board/ExamYEar)
-  const [dbUser, setDbUser] = useState(null);
-  const [loadingDb, setLoadingDb] = useState(false);
+  // Prevent modal reopening loop after user closes it once in this session
+  const [autoPrompted, setAutoPrompted] = useState(false);
 
   // Used to gently bust cache after successful profile save (avatar change)
   const [avatarVersion, setAvatarVersion] = useState(0);
 
+  const baseUrl = useMemo(
+    () =>
+      import.meta.env?.VITE_API_URL ||
+      "https://ugliest-hannie-ezaz-307892de.koyeb.app",
+    [],
+  );
+
+  // Fetch firebase user + backend user
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
 
-      if (user) {
-        try {
-          setLoadingDb(true);
-          const baseUrl =
-            import.meta.env?.VITE_API_URL ||
-            "https://ugliest-hannie-ezaz-307892de.koyeb.app";
-          const res = await fetch(`${baseUrl}/api/users/${user.uid}`);
-          if (res.ok) {
-            const data = await res.json();
-            setDbUser(data);
-          } else {
-            setDbUser(null);
-          }
-        } catch (e) {
-          console.error("Failed to fetch user profile:", e);
-          setDbUser(null);
-        } finally {
-          setLoadingDb(false);
-        }
-      } else {
+      // reset prompt flag on logout
+      if (!user) {
         setDbUser(null);
+        setAutoPrompted(false);
+        setShowProfileModal(false);
+        return;
+      }
+
+      try {
+        setLoadingDb(true);
+        const res = await fetch(`${baseUrl}/api/users/${user.uid}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDbUser(data);
+        } else {
+          setDbUser(null);
+        }
+      } catch (e) {
+        console.error("Failed to fetch user profile:", e);
+        setDbUser(null);
+      } finally {
+        setLoadingDb(false);
       }
     });
 
     return () => unsubscribe();
-  }, [auth]);
+  }, [auth, baseUrl]);
+
+  // ✅ AUTO-OPEN the SAME ProfileModal if missing Board/Year/Phone (logged-in only)
+  useEffect(() => {
+    if (!currentUser || !dbUser) return;
+    if (autoPrompted) return;
+
+    if (isProfileIncomplete(dbUser)) {
+      setShowProfileModal(true);
+    }
+
+    setAutoPrompted(true);
+  }, [currentUser, dbUser, autoPrompted]);
 
   const displayName = currentUser
     ? currentUser.displayName || currentUser.email
     : "Not logged in";
   const avatarInitial = (displayName?.trim?.()[0] || "?").toUpperCase();
 
-  // Prefer a backend timestamp if you have one (e.g., updatedAt), else use lastSignInTime.
-  // We additionally bump a local avatarVersion to force a refresh after saving.
   const versionKey =
     dbUser?.updatedAt ||
     currentUser?.metadata?.lastSignInTime ||
@@ -225,6 +275,10 @@ export default function StudentWelcome({ student, onOpenAuth }) {
                     : "Board: —"}
                   {" • "}
                   {dbUser?.ExamYEar ? dbUser.ExamYEar : "Year: —"}
+                  {" • "}
+                  {dbUser?.phone && dbUser.phone !== "none"
+                    ? dbUser.phone
+                    : "Phone: —"}
                 </>
               ) : null}
             </p>
@@ -233,11 +287,8 @@ export default function StudentWelcome({ student, onOpenAuth }) {
           <button
             className="rounded-full border border-gray-200 dark:border-gray-800 px-3 py-1.5 text-xs font-medium"
             onClick={() => {
-              if (currentUser) {
-                setShowProfileModal(true);
-              } else {
-                onOpenAuth?.();
-              }
+              if (currentUser) setShowProfileModal(true);
+              else onOpenAuth?.();
             }}
           >
             {currentUser ? "Profile" : "Login"}
@@ -245,6 +296,7 @@ export default function StudentWelcome({ student, onOpenAuth }) {
         </div>
       </motion.section>
 
+      {/* Inline Update Modal */}
       {currentUser && (
         <ProfileModal
           open={showProfileModal}
@@ -252,18 +304,14 @@ export default function StudentWelcome({ student, onOpenAuth }) {
           firebaseUser={currentUser}
           dbUser={dbUser}
           loadingDb={loadingDb}
+          baseUrl={baseUrl}
           onSaved={async (updatedDbUser, photoChanged) => {
-            // Update backend user in UI
             setDbUser(updatedDbUser);
 
-            // Force-refresh the Firebase Auth user (to pick updated photoURL/name)
             await currentUser.reload?.();
             setCurrentUser(getAuth().currentUser);
 
-            // If photo changed, bump local version to invalidate image cache
-            if (photoChanged) {
-              setAvatarVersion((v) => v + 1);
-            }
+            if (photoChanged) setAvatarVersion((v) => v + 1);
           }}
         />
       )}
@@ -272,9 +320,9 @@ export default function StudentWelcome({ student, onOpenAuth }) {
 }
 
 /* ============================================================
-   Inline Profile Modal
+   ProfileModal
    - Edits Firebase displayName
-   - Edits backend Board + ExamYEar
+   - Edits backend Board + ExamYEar + phone
    - (Optional) Uploads a new avatar to Firebase Storage and updates photoURL
 ============================================================ */
 function ProfileModal({
@@ -284,10 +332,14 @@ function ProfileModal({
   dbUser,
   loadingDb,
   onSaved,
+  baseUrl,
 }) {
   const [name, setName] = useState(firebaseUser?.displayName || "");
-  const [board, setBoard] = useState(dbUser?.Board || "Dhaka"); // default "Dhaka"
+  const [board, setBoard] = useState(dbUser?.Board || "Dhaka");
   const [year, setYear] = useState(dbUser?.ExamYEar || "");
+  const [phone, setPhone] = useState(
+    dbUser?.phone && dbUser.phone !== "none" ? dbUser.phone : "",
+  );
 
   const [avatarFile, setAvatarFile] = useState(null);
 
@@ -295,13 +347,13 @@ function ProfileModal({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (open) {
-      setName(firebaseUser?.displayName || "");
-      setBoard(dbUser?.Board || "Dhaka");
-      setYear(dbUser?.ExamYEar || "");
-      setAvatarFile(null);
-      setError("");
-    }
+    if (!open) return;
+    setName(firebaseUser?.displayName || "");
+    setBoard(dbUser?.Board || "Dhaka");
+    setYear(dbUser?.ExamYEar || "");
+    setPhone(dbUser?.phone && dbUser.phone !== "none" ? dbUser.phone : "");
+    setAvatarFile(null);
+    setError("");
   }, [open, firebaseUser, dbUser]);
 
   if (!open) return null;
@@ -314,38 +366,35 @@ function ProfileModal({
     let photoChanged = false;
 
     try {
-      // 0) Base URL for backend
-      const baseUrl =
-        import.meta.env?.VITE_API_URL ||
-        "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+      // Phone normalize/validate
+      const normalized = normalizeBdPhone(phone);
+      if (!normalized.ok) throw new Error(normalized.message);
 
-      // 1) If the user selected a new avatar, upload to Firebase Storage and update photoURL
+      // 1) Avatar upload (optional)
       if (avatarFile) {
-        const storage = getStorage(); // assumes Firebase app is initialized in your app entry
+        const storage = getStorage();
         const ext = avatarFile.name.split(".").pop()?.toLowerCase() || "jpg";
         const objectPath = `avatars/${firebaseUser.uid}/avatar.${ext}`;
         const fileRef = storageRef(storage, objectPath);
 
-        // upload and get public URL
         await uploadBytes(fileRef, avatarFile);
         const publicUrl = await getDownloadURL(fileRef);
 
-        // update Firebase auth profile photoURL
         await updateProfile(firebaseUser, { photoURL: publicUrl });
         photoChanged = true;
       }
 
-      // 2) Update displayName if changed
+      // 2) displayName (optional)
       if (name && name !== firebaseUser.displayName) {
         await updateProfile(firebaseUser, { displayName: name });
       }
 
-      // 3) Update backend (Board + ExamYEar)
+      // 3) Backend update (Board + ExamYEar + phone)
       const payload = {
         Board:
           typeof board === "string" && board.trim() ? board.trim() : "none",
-        // Keep schema key EXACT if your model uses "ExamYEar"
         ExamYEar: Number(year) || 0,
+        phone: normalized.value || "none",
       };
 
       const currentYear = new Date().getFullYear();
@@ -362,7 +411,7 @@ function ProfileModal({
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          // Optional: include ID token if your backend verifies it
+          // If your backend verifies tokens, uncomment:
           // Authorization: `Bearer ${await firebaseUser.getIdToken()}`,
         },
         body: JSON.stringify(payload),
@@ -379,12 +428,11 @@ function ProfileModal({
 
       const updatedDbUser = await res.json();
 
-      // done
       onSaved?.(updatedDbUser, photoChanged);
       onClose?.();
     } catch (err) {
       console.error("PROFILE SAVE ERROR:", err);
-      setError(err.message || "Could not save changes.");
+      setError(err?.message || "Could not save changes.");
     } finally {
       setSaving(false);
     }
@@ -396,12 +444,13 @@ function ProfileModal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900">
+      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold">Edit Profile</h3>
           <button
             className="text-sm text-gray-500 hover:text-gray-800 dark:text-gray-300"
             onClick={onClose}
+            disabled={saving}
           >
             ✕
           </button>
@@ -429,6 +478,24 @@ function ProfileModal({
               />
               <p className="mt-1 text-xs text-gray-500">
                 Updates your Firebase profile name.
+              </p>
+            </div>
+
+            {/* Phone */}
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-gray-700 dark:bg-gray-800"
+                placeholder="01XXXXXXXXX"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Format: 01XXXXXXXXX (or +8801XXXXXXXXX)
               </p>
             </div>
 
@@ -463,6 +530,19 @@ function ProfileModal({
                 onChange={(e) => setYear(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-teal-500 dark:border-gray-700 dark:bg-gray-800"
                 placeholder={`${new Date().getFullYear()}`}
+              />
+            </div>
+
+            {/* Avatar */}
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Profile Photo (optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
+                className="block w-full text-sm"
               />
             </div>
 
