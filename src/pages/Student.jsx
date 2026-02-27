@@ -223,16 +223,26 @@ export default function Student({ onOpenAuth, setRoute }) {
         const notesRes = await fetch(notesUrl);
         if (notesRes.ok) {
           const notes = await notesRes.json();
+
           const latest = Array.isArray(notes)
             ? notes
                 .slice()
-                .sort(
-                  (a, b) =>
-                    safeToDate(b.createdAt).getTime() -
-                    safeToDate(a.createdAt).getTime(),
-                )
+                .sort((a, b) => {
+                  const nameA = (
+                    a.noteName ||
+                    a.originalName ||
+                    ""
+                  ).toLowerCase();
+                  const nameB = (
+                    b.noteName ||
+                    b.originalName ||
+                    ""
+                  ).toLowerCase();
+                  return nameA.localeCompare(nameB);
+                })
                 .slice(0, 5)
             : [];
+
           setLatestNotesSafe(latest);
         } else {
           setLatestNotesSafe([]);

@@ -147,7 +147,13 @@ export default function Notes({ openPdf, currentUser, locale }) {
   }, [fetchDbUser]);
 
   const normalizedNotes = useMemo(() => {
-    return notes.map((n) => ({ ...n, stableKey: getStableKey(n) }));
+    return [...notes]
+      .sort((a, b) => {
+        const nameA = (a.noteName || a.originalName || "").toLowerCase();
+        const nameB = (b.noteName || b.originalName || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      })
+      .map((n) => ({ ...n, stableKey: getStableKey(n) }));
   }, [notes]);
 
   const isValidated = !!dbUser?.is_validated;

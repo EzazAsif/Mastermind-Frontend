@@ -172,15 +172,23 @@ export default function Chapters() {
   const fetchChapters = async () => {
     try {
       setLoadingChapters(true);
+
       const raw = await fetch(
         "https://ugliest-hannie-ezaz-307892de.koyeb.app/exams",
       ).then((res) => res.json());
-      const data = (Array.isArray(raw) ? raw : []).map(normalizeChapter);
 
-      setChapters(data || []);
+      const data = (Array.isArray(raw) ? raw : [])
+        .map(normalizeChapter)
+        .sort((a, b) =>
+          (a.title || "").localeCompare(b.title || "", undefined, {
+            sensitivity: "base",
+          }),
+        );
+
+      setChapters(data);
 
       if (selectedChapter) {
-        const updated = (data || []).find((c) => c.id === selectedChapter.id);
+        const updated = data.find((c) => c.id === selectedChapter.id);
         setSelectedChapter(updated || null);
       }
     } catch (err) {
