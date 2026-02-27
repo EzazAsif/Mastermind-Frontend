@@ -43,12 +43,27 @@ export default function ViewPdf({ fileName, onBack }) {
   }, []);
   useEffect(() => () => roRef.current?.disconnect(), []);
 
+  // ---------- Helpers ----------
+  const scrollToTopLeft = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    // Do it after layout/paint to avoid PDF render shifting scroll
+    requestAnimationFrame(() => {
+      scroller.scrollTop = 0;
+      scroller.scrollLeft = 0;
+    });
+  }, []);
+
   // ---------- Document callbacks ----------
   const onDocumentLoadSuccess = ({ numPages: n }) => {
     setNumPages(n);
     setCurrentPage(1);
     setPageInput("1");
     setLoadError(null);
+
+    // ✅ ensure initial top
+    scrollToTopLeft();
   };
 
   const onDocumentLoadError = (err) => {
@@ -92,10 +107,12 @@ export default function ViewPdf({ fileName, onBack }) {
   }, [clampPage, pageInput]);
 
   // ---------- Zoom helpers ----------
-  const clampZoom = useCallback(
-    (z) => Math.min(Math.max(z, MIN_ZOOM), MAX_ZOOM),
-    [],
-  );
+  const clampZoom = useCallback((z) => {
+    // ✅ keep zoom always integer (no decimals from pinch)
+    const zi = Math.round(z); // or Math.trunc(z)
+    return Math.min(Math.max(zi, MIN_ZOOM), MAX_ZOOM);
+  }, []);
+
   const zoomIn = () => setZoom((z) => clampZoom(z + 10));
   const zoomOut = () => setZoom((z) => clampZoom(z - 10));
   const resetZoom = () => setZoom(100);
@@ -123,17 +140,17 @@ export default function ViewPdf({ fileName, onBack }) {
       } catch {
         // ignore
       }
+
+      // ✅ IMPORTANT: force top AFTER render finishes (fixes "loads from bottom")
+      scrollToTopLeft();
     },
-    [baseWidth],
+    [baseWidth, scrollToTopLeft],
   );
 
-  // When page changes, reset scroll position (optional)
+  // When page changes, reset scroll position (optional, keep it)
   useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    scroller.scrollTop = 0;
-    scroller.scrollLeft = 0;
-  }, [currentPage]);
+    scrollToTopLeft();
+  }, [currentPage, scrollToTopLeft]);
 
   // ---------- Touch / Pointer pinch + pan ----------
   const pointersRef = useRef(new Map()); // pointerId -> {x,y}
@@ -158,7 +175,7 @@ export default function ViewPdf({ fileName, onBack }) {
       const scroller = scrollerRef.current;
       if (!scroller) return;
 
-      const clamped = clampZoom(newZoom);
+      const clamped = clampZoom(newZoom); // ✅ rounded + clamped
 
       const prevScale = zoom / 100;
       const nextScale = clamped / 100;
@@ -397,7 +414,9 @@ export default function ViewPdf({ fileName, onBack }) {
           >
             −
           </button>
-          <span className="text-sm font-medium w-12 text-center">{zoom}%</span>
+          <span className="text-sm font-medium w-12 text-center">
+            {Math.round(zoom)}%
+          </span>
           <button
             onClick={zoomIn}
             className="px-3 py-1 border rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
