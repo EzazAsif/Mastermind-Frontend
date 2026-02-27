@@ -140,16 +140,16 @@ export default function Student({ onOpenAuth, setRoute }) {
 
           if (notesRes.ok) {
             const notes = await notesRes.json();
+
             const latest = Array.isArray(notes)
               ? notes
                   .slice()
-                  .sort(
-                    (a, b) =>
-                      safeToDate(b?.createdAt).getTime() -
-                      safeToDate(a?.createdAt).getTime(),
+                  .sort((a, b) =>
+                    (a?.noteName || "").localeCompare(b?.noteName || ""),
                   )
                   .slice(0, 5)
               : [];
+
             setLatestNotesSafe(latest);
           } else {
             setLatestNotesSafe([]);
