@@ -500,10 +500,6 @@ export default function ViewPdf({ fileName, onBack }) {
               </div>
             </div>
           </Document>
-
-          <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            1 finger = scroll, 2 fingers = pinch zoom (container stays fixed).
-          </div>
         </div>
       </motion.div>
 
