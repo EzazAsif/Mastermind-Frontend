@@ -48,13 +48,24 @@ function safeToLocaleDateString(input) {
   return safeToDate(input, new Date()).toLocaleDateString();
 }
 
-/** Helper: get top 5 items by createdAt desc in a robust way */
+/** Helper: top 5 newest by createdAt (for announcements) */
 function top5ByCreatedAtDesc(arr) {
   return (Array.isArray(arr) ? arr.slice() : [])
     .sort(
       (a, b) =>
         safeToDate(b?.createdAt).getTime() - safeToDate(a?.createdAt).getTime(),
     )
+    .slice(0, 5);
+}
+
+/** Helper: top 5 by noteName A-Z (for notes) */
+function top5ByNoteNameAsc(arr) {
+  return (Array.isArray(arr) ? arr.slice() : [])
+    .sort((a, b) => {
+      const A = String(a?.noteName || a?.originalName || "").toLowerCase();
+      const B = String(b?.noteName || b?.originalName || "").toLowerCase();
+      return A.localeCompare(B);
+    })
     .slice(0, 5);
 }
 
@@ -85,18 +96,17 @@ export default function Student({ onOpenAuth, setRoute }) {
   const [latestNotes, setLatestNotes] = useState([]);
   const [latestAnnouncements, setLatestAnnouncements] = useState([]);
 
-  // Profile details we’ll fetch similar to StudentWelcome.jsx
-  const [board, setBoard] = useState(""); // e.g., "Dhaka"
-  const [examYear, setExamYear] = useState(""); // e.g., "2026"
+  // Profile details
+  const [board, setBoard] = useState("");
+  const [examYear, setExamYear] = useState("");
 
   const [downloading, setDownloading] = useState(false);
 
-  // NEW: backend validation flag
+  // backend validation flag
   const [isValidated, setIsValidated] = useState(false);
 
   const mountedRef = useRef(true);
 
-  // ✅ keep goToNotes at component scope (NOT inside auth callback)
   const goToNotes = () => setRoute("Notes");
 
   useEffect(() => {
@@ -112,7 +122,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         import.meta.env.VITE_API_URL ||
         "https://ugliest-hannie-ezaz-307892de.koyeb.app";
 
-      // Safe setState wrapper
       const safeSet =
         (setter) =>
         (...args) => {
@@ -140,37 +149,18 @@ export default function Student({ onOpenAuth, setRoute }) {
 
           if (notesRes.ok) {
             const notes = await notesRes.json();
-
-            const latest = Array.isArray(notes)
-              ? notes
-                  .slice()
-                  .sort((a, b) =>
-                    (a?.noteName || "").localeCompare(b?.noteName || ""),
-                  )
-                  .slice(0, 5)
-              : [];
-
-            setLatestNotesSafe(latest);
+            setLatestNotesSafe(Array.isArray(notes) ? notes : []);
           } else {
             setLatestNotesSafe([]);
           }
 
           if (annRes.ok) {
             const anns = (await annRes.json()) || [];
-            const latestAnns = anns
-              .slice()
-              .sort(
-                (a, b) =>
-                  safeToDate(b?.createdAt).getTime() -
-                  safeToDate(a?.createdAt).getTime(),
-              )
-              .slice(0, 5);
-            setLatestAnnouncementsSafe(latestAnns);
+            setLatestAnnouncementsSafe(Array.isArray(anns) ? anns : []);
           } else {
             setLatestAnnouncementsSafe([]);
           }
 
-          // Guest defaults
           setBoardSafe("—");
           setExamYearSafe("—");
           setIsValidatedSafe(false);
@@ -192,7 +182,7 @@ export default function Student({ onOpenAuth, setRoute }) {
       try {
         setLoadingSafe(true);
 
-        // 1) Fetch backend user → last_score, displayName, Board, ExamYEar, is_validated
+        // 1) backend user
         const res = await fetch(`${baseUrl}/api/users/${user.uid}`);
         if (res.ok) {
           const dbUser = await res.json();
@@ -204,7 +194,6 @@ export default function Student({ onOpenAuth, setRoute }) {
               : "—",
           );
           setExamYearSafe(dbUser?.ExamYEar ? String(dbUser?.ExamYEar) : "—");
-
           setIsValidatedSafe(Boolean(dbUser?.is_validated));
 
           setDataSafe((prev) => ({
@@ -220,41 +209,25 @@ export default function Student({ onOpenAuth, setRoute }) {
           setIsValidatedSafe(false);
         }
 
-        // 2) Latest notes (keep newest-first here; render will show Free/Premium)
+        // 2) notes
         const notesUrl = `${baseUrl}/api/notes?uid=${encodeURIComponent(
           user.uid,
         )}&limit=5`;
         const notesRes = await fetch(notesUrl);
         if (notesRes.ok) {
           const notes = await notesRes.json();
-          const latest = Array.isArray(notes)
-            ? notes
-                .slice()
-                .sort(
-                  (a, b) =>
-                    safeToDate(b?.createdAt).getTime() -
-                    safeToDate(a?.createdAt).getTime(),
-                )
-                .slice(0, 5)
-            : [];
-          setLatestNotesSafe(latest);
+          setLatestNotesSafe(Array.isArray(notes) ? notes : []);
         } else {
           setLatestNotesSafe([]);
         }
 
-        // 3) Announcements
+        // 3) announcements
         const announcementsRes = await fetch(`${baseUrl}/api/announcements`);
         if (announcementsRes.ok) {
           const announcementsData = (await announcementsRes.json()) || [];
-          const latestAnns = announcementsData
-            .slice()
-            .sort(
-              (a, b) =>
-                safeToDate(b?.createdAt).getTime() -
-                safeToDate(a?.createdAt).getTime(),
-            )
-            .slice(0, 5);
-          setLatestAnnouncementsSafe(latestAnns);
+          setLatestAnnouncementsSafe(
+            Array.isArray(announcementsData) ? announcementsData : [],
+          );
         } else {
           setLatestAnnouncementsSafe([]);
         }
@@ -273,22 +246,22 @@ export default function Student({ onOpenAuth, setRoute }) {
     return () => unsubscribe();
   }, []);
 
-  // UI-level guarantee: top 5 newest first
+  // ✅ Notes: A–Z (noteName/originalName)
   const top5Notes = useMemo(
-    () => top5ByCreatedAtDesc(latestNotes),
+    () => top5ByNoteNameAsc(latestNotes),
     [latestNotes],
   );
+
+  // ✅ Announcements: newest first
   const top5Announcements = useMemo(
     () => top5ByCreatedAtDesc(latestAnnouncements),
     [latestAnnouncements],
   );
 
-  // === HSC-style Certificate, website-issued, no gibberish, hide empty fields, no QR, wrapped header ===
   async function handleDownloadCertificate() {
     try {
       setDownloading(true);
 
-      // ---- Inputs from your state / backend ----
       const studentName = (data?.student?.name || "Student").trim();
       const mark = Number(lastScore) || 0;
       const grade = getGrade(mark);
@@ -298,7 +271,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       const examTitle = "Higher Secondary Certificate (HSC)";
       const subjectTitle = "ICT MCQ Assessment";
 
-      // OPTIONAL fields
       const rollNo = undefined;
       const regNo = undefined;
       const centerName = undefined;
@@ -306,7 +278,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         ? `${Number(examYearStr) - 1}-${examYearStr}`
         : undefined;
 
-      // ---- Design Palette ----
       const TEAL = [0, 121, 107];
       const GOLD = [191, 144, 0];
       const DARK = [34, 34, 34];
@@ -314,19 +285,16 @@ export default function Student({ onOpenAuth, setRoute }) {
       const LIGHT = [242, 244, 247];
       const BORDER = [220, 223, 230];
 
-      // ---- Create doc ----
       const doc = new jsPDF({ unit: "pt", format: "A4" });
       const W = doc.internal.pageSize.getWidth();
       const H = doc.internal.pageSize.getHeight();
 
-      // ---- Page Border ----
       doc.setDrawColor(...BORDER);
       doc.setLineWidth(1.2);
       doc.rect(24, 24, W - 48, H - 48);
       doc.setDrawColor(...BORDER);
       doc.rect(36, 36, W - 72, H - 72);
 
-      // ---- Header Band with logo ----
       const bandH = 88;
       const bandX = 36;
       const bandY = 36;
@@ -334,7 +302,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setFillColor(...LIGHT);
       doc.rect(bandX, bandY, bandW, bandH, "F");
 
-      // Logo
       const logoX = 52;
       const logoY = 46;
       const logoSize = 64;
@@ -353,7 +320,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         });
       }
 
-      // Header text — WEBSITE, not Board
       const headerLeft = logoX + logoSize + 20;
       const headerRightMargin = 24;
       const headerMaxWidth = W - headerLeft - headerRightMargin - 36;
@@ -371,7 +337,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       const subtitleLines = doc.splitTextToSize(subtitle, headerMaxWidth);
       doc.text(subtitleLines, headerLeft, 85);
 
-      // ---- Certificate Title ----
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(22);
@@ -389,7 +354,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         { align: "center" },
       );
 
-      // ---- Serial Row ----
       const infoX = 52;
       const infoY = 210;
       doc.setFont("helvetica", "normal");
@@ -398,7 +362,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       const serialNo = "MM-HSC-" + String(Date.now()).slice(-8);
       doc.text(`Serial No.: ${serialNo}`, infoX, infoY);
 
-      // ---- Formal Statement ----
       const stmtX = 52;
       const stmtY = 250;
       const stmtW = W - 104;
@@ -412,7 +375,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       const linesEn = doc.splitTextToSize(statementEn, stmtW);
       doc.text(linesEn, stmtX, stmtY);
 
-      // ---- Details Card ----
       const cardX = 52;
       const cardY = stmtY + 48;
       const cardW = W - 104;
@@ -422,7 +384,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setLineWidth(1);
       doc.roundedRect(cardX, cardY, cardW, cardH, 10, 10, "S");
 
-      // Title strip
       doc.setFillColor(...TEAL);
       doc.roundedRect(cardX, cardY, 200, 26, 10, 10, "F");
       doc.setFont("helvetica", "bold");
@@ -450,20 +411,17 @@ export default function Student({ onOpenAuth, setRoute }) {
         return yPos + rowGap;
       };
 
-      // Left column
       y = addField("Candidate Name", studentName, leftX, y);
       y = addField("Roll No.", rollNo, leftX, y);
       y = addField("Registration No.", regNo, leftX, y);
       y = addField("Session", sessionStr, leftX, y);
 
-      // Right column
       let ry = cardY + 54;
       ry = addField("Board", boardNameEn || undefined, rightX, ry);
       ry = addField("Exam Year", examYearStr || undefined, rightX, ry);
       ry = addField("Exam", examTitle, rightX, ry);
       ry = addField("Exam Centre", centerName, rightX, ry);
 
-      // Divider Line
       doc.setDrawColor(...BORDER);
       doc.setLineWidth(0.8);
       doc.line(
@@ -473,14 +431,12 @@ export default function Student({ onOpenAuth, setRoute }) {
         cardY + cardH - 84,
       );
 
-      // Result Row
       const rY = cardY + cardH - 58;
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(12);
       doc.text("Result (Grade):", cardX + 16, rY);
 
-      // Grade badge
       const gradeText = grade;
       const badgePaddingX = 10;
       const textW = doc.getTextWidth(gradeText) + badgePaddingX * 2;
@@ -492,14 +448,12 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setFontSize(11);
       doc.text(gradeText, badgeX + badgePaddingX, rY + 2);
 
-      // Percentage
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(12);
       doc.text("Score (%):", rightX, rY);
       doc.text(String(mark), rightX + 80, rY);
 
-      // Issue Date
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(10);
@@ -509,7 +463,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         cardY + cardH - 16,
       );
 
-      // ---- Signatures ----
       const sigY = cardY + cardH + 72;
       const sigBoxW = 180;
       const leftSigX = 52;
@@ -533,7 +486,6 @@ export default function Student({ onOpenAuth, setRoute }) {
         "(Authorized Signature)",
       );
 
-      // ---- Footer note ----
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(9);
@@ -765,22 +717,21 @@ export default function Student({ onOpenAuth, setRoute }) {
           )}
         </ul>
       </motion.section>
+
+      {/* Branding Card */}
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
         className="rounded-xl2 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-soft overflow-hidden"
       >
-        {/* Top Image */}
         <img
           src="/ictbanner.jpg"
           alt="ICT Mastermind Banner"
           className="w-full h-48 sm:h-64 object-cover"
         />
 
-        {/* Content */}
         <div className="p-6 space-y-4">
-          {/* Center Content */}
           <div className="text-center space-y-3">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white">
               ICT Mastermind
@@ -792,11 +743,11 @@ export default function Student({ onOpenAuth, setRoute }) {
                 : "Unlock Your HSC ICT Potential!"}
             </p>
 
-            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+            <p className="text-sm sm:text-base font-semibold text-gray-600 dark:text-gray-400">
               HSC ICT Learning & Exam Preparation Platform
             </p>
 
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm font-semibold text-gray-600 dark:text-gray-400">
               HSC ICT Preparation, Smart Tips & Exam Hacks – সব এক জায়গায়!
               <br />
               Board Exam Ready হতে আজই শুরু করো।
@@ -812,9 +763,7 @@ export default function Student({ onOpenAuth, setRoute }) {
             )}
           </div>
 
-          {/* Bottom Section */}
           <div className="pt-6 border-t border-gray-200 dark:border-gray-800">
-            {/* Social Links - Bottom Left & Larger */}
             <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
               <div className="flex gap-6 text-base font-medium">
                 <a
@@ -836,7 +785,6 @@ export default function Student({ onOpenAuth, setRoute }) {
                 </a>
               </div>
 
-              {/* Copyright Right Side */}
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 © 2026 ICT Mastermind. All Rights Reserved
               </span>
