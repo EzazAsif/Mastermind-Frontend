@@ -16,7 +16,8 @@
     "axios": "^1.4.0",
     "react-pdf": "^7.0.0",
     "jspdf": "^2.5.1",
-    "pdfjs-dist": "^3.11.174"
+    "pdfjs-dist": "^3.11.174",
+    "react-zoom-pan-pinch": "^2.1.3"
   },
   "devDependencies": {
     "firebase": "^10.x.x",

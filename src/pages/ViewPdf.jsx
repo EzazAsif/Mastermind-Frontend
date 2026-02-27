@@ -1,12 +1,13 @@
-// ViewPdf.jsx (FULL SCREEN FIXED)
-// Back button fully clickable
-// Tap zones start below header
-// Overlay bars visible
-// Proper z-index layering
+// ViewPdf.jsx (FULL SCREEN + PINCH ZOOM + PAN + SWIPE PAGE)
+// - Pinch zoom + pan via react-zoom-pan-pinch
+// - Swipe left/right changes page ONLY when not zoomed
+// - Tap zones still work when not zoomed
+// - Top controls always clickable
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Document, Page, pdfjs } from "react-pdf";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 
@@ -21,6 +22,9 @@ export default function ViewPdf({ fileName, onBack }) {
 
   const containerRef = useRef(null);
   const [containerWidth, setContainerWidth] = useState(1);
+
+  // Track whether user is zoomed in (scale > 1)
+  const [isZoomed, setIsZoomed] = useState(false);
 
   // -------- Lock body scroll --------
   useEffect(() => {
@@ -56,9 +60,7 @@ export default function ViewPdf({ fileName, onBack }) {
     if (!containerRef.current) return;
     const node = containerRef.current;
 
-    const update = () => {
-      setContainerWidth(Math.max(1, node.clientWidth - 24));
-    };
+    const update = () => setContainerWidth(Math.max(1, node.clientWidth - 24));
 
     update();
     const ro = new ResizeObserver(() => requestAnimationFrame(update));
@@ -70,8 +72,6 @@ export default function ViewPdf({ fileName, onBack }) {
   const onDocumentLoadSuccess = ({ numPages: n }) => {
     setNumPages(n);
     setLoadError(null);
-
-    // Keep valid page, don't force 1 every time
     setCurrentPage((p) => Math.max(1, Math.min(n || 1, p || 1)));
   };
 
@@ -90,6 +90,14 @@ export default function ViewPdf({ fileName, onBack }) {
     setCurrentPage((p) => Math.min(numPages || 1, p + 1));
   }, [numPages]);
 
+  // Reset zoom when page changes (so user doesn't get stuck zoomed on next page)
+  const zoomApiRef = useRef(null);
+  useEffect(() => {
+    // If we have a zoom api, reset to 1x when page changes
+    zoomApiRef.current?.resetTransform?.();
+    setIsZoomed(false);
+  }, [currentPage]);
+
   // -------- Keyboard support --------
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -101,7 +109,7 @@ export default function ViewPdf({ fileName, onBack }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onBack, prevPage, nextPage]);
 
-  // -------- Swipe logic --------
+  // -------- Swipe logic (ONLY when not zoomed) --------
   const swipeRef = useRef({
     active: false,
     startX: 0,
@@ -113,39 +121,47 @@ export default function ViewPdf({ fileName, onBack }) {
   const SWIPE_MIN_X = 60;
   const SWIPE_MAX_Y = 70;
 
-  const onPointerDown = useCallback((e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    swipeRef.current.active = true;
-    swipeRef.current.startX = e.clientX;
-    swipeRef.current.startY = e.clientY;
-    swipeRef.current.lastX = e.clientX;
-    swipeRef.current.lastY = e.clientY;
-  }, []);
-
-  const onPointerMove = useCallback((e) => {
-    if (!swipeRef.current.active) return;
-    swipeRef.current.lastX = e.clientX;
-    swipeRef.current.lastY = e.clientY;
-  }, []);
-
-  const onPointerUp = useCallback(
+  const onPointerDown = useCallback(
     (e) => {
-      if (!swipeRef.current.active) return;
-      swipeRef.current.active = false;
+      if (isZoomed) return; // allow pan/zoom instead
+      if (e.pointerType === "mouse" && e.button !== 0) return;
 
-      const dx = swipeRef.current.lastX - swipeRef.current.startX;
-      const dy = swipeRef.current.lastY - swipeRef.current.startY;
-
-      if (Math.abs(dx) >= SWIPE_MIN_X && Math.abs(dy) <= SWIPE_MAX_Y) {
-        if (dx < 0 && canNext) nextPage();
-        if (dx > 0 && canPrev) prevPage();
-      }
+      swipeRef.current.active = true;
+      swipeRef.current.startX = e.clientX;
+      swipeRef.current.startY = e.clientY;
+      swipeRef.current.lastX = e.clientX;
+      swipeRef.current.lastY = e.clientY;
     },
-    [canNext, canPrev, nextPage, prevPage],
+    [isZoomed],
   );
 
-  const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
+  const onPointerMove = useCallback(
+    (e) => {
+      if (isZoomed) return;
+      if (!swipeRef.current.active) return;
 
+      swipeRef.current.lastX = e.clientX;
+      swipeRef.current.lastY = e.clientY;
+    },
+    [isZoomed],
+  );
+
+  const onPointerUp = useCallback(() => {
+    if (isZoomed) return;
+    if (!swipeRef.current.active) return;
+
+    swipeRef.current.active = false;
+
+    const dx = swipeRef.current.lastX - swipeRef.current.startX;
+    const dy = swipeRef.current.lastY - swipeRef.current.startY;
+
+    if (Math.abs(dx) >= SWIPE_MIN_X && Math.abs(dy) <= SWIPE_MAX_Y) {
+      if (dx < 0 && canNext) nextPage();
+      if (dx > 0 && canPrev) prevPage();
+    }
+  }, [isZoomed, canNext, canPrev, nextPage, prevPage]);
+
+  const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
   if (!fileUrl) return null;
 
   return (
@@ -153,7 +169,8 @@ export default function ViewPdf({ fileName, onBack }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       className="fixed inset-0 z-[9999] bg-black"
-      style={{ touchAction: "pan-y", overscrollBehavior: "none" }}
+      // IMPORTANT: don't restrict gestures here
+      style={{ touchAction: "auto", overscrollBehavior: "none" }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -164,19 +181,54 @@ export default function ViewPdf({ fileName, onBack }) {
         ref={containerRef}
         className="absolute inset-0 z-0 flex items-center justify-center"
       >
-        <Document
-          file={file}
-          onLoadSuccess={onDocumentLoadSuccess}
-          onLoadError={onDocumentLoadError}
-          loading={<div className="text-white/70">Loading PDF…</div>}
-        >
-          <Page
-            pageNumber={currentPage}
-            width={containerWidth}
-            renderTextLayer={false}
-            renderAnnotationLayer={true}
-          />
-        </Document>
+        {loadError ? (
+          <div className="text-white/80 text-sm p-4">{loadError}</div>
+        ) : (
+          <Document
+            file={file}
+            onLoadSuccess={onDocumentLoadSuccess}
+            onLoadError={onDocumentLoadError}
+            loading={<div className="text-white/70">Loading PDF…</div>}
+          >
+            <TransformWrapper
+              minScale={1}
+              maxScale={4}
+              centerOnInit
+              // Keep a handle so we can reset on page change if we want
+              onInit={(api) => (zoomApiRef.current = api)}
+              onZoomStop={(api) => setIsZoomed(api.state.scale > 1.01)}
+              onTransformed={(api) => setIsZoomed(api.state.scale > 1.01)}
+              pinch={{ step: 5 }}
+              panning={{ velocityDisabled: true }}
+              doubleClick={{ mode: "zoomIn" }}
+              wheel={{ disabled: true }} // optional: disable mouse wheel zoom
+            >
+              <TransformComponent
+                wrapperStyle={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  // CRITICAL: allow pinch + pan
+                  touchAction: "none",
+                }}
+                contentStyle={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Page
+                  pageNumber={currentPage}
+                  width={containerWidth}
+                  renderTextLayer={false}
+                  renderAnnotationLayer={true}
+                />
+              </TransformComponent>
+            </TransformWrapper>
+          </Document>
+        )}
       </div>
 
       {/* Black Bars */}
@@ -218,23 +270,25 @@ export default function ViewPdf({ fileName, onBack }) {
         </div>
       </div>
 
-      {/* Tap zones START BELOW header */}
+      {/* Tap zones START BELOW header (disable when zoomed so pan works) */}
       <button
         onClick={prevPage}
-        disabled={!canPrev}
+        disabled={!canPrev || isZoomed}
         className="absolute left-0 top-20 z-20 h-[calc(100%-5rem)] w-[18%] disabled:opacity-0"
         style={{ background: "transparent" }}
       />
       <button
         onClick={nextPage}
-        disabled={!canNext}
+        disabled={!canNext || isZoomed}
         className="absolute right-0 top-20 z-20 h-[calc(100%-5rem)] w-[18%] disabled:opacity-0"
         style={{ background: "transparent" }}
       />
 
       {/* Bottom Hint */}
       <div className="absolute bottom-3 left-1/2 z-30 -translate-x-1/2 text-xs text-white/80 px-3 py-2 rounded-xl bg-white/10">
-        Swipe ← / → to change page
+        {isZoomed
+          ? "Pinch to zoom • Drag to pan • Double tap to zoom"
+          : "Swipe ← / → to change page"}
       </div>
     </motion.div>
   );
