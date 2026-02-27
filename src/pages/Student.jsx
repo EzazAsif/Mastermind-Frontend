@@ -1,3 +1,4 @@
+// src/pages/Student.jsx
 import { useEffect, useState, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { onAuthStateChanged } from "firebase/auth";
@@ -95,6 +96,9 @@ export default function Student({ onOpenAuth, setRoute }) {
 
   const mountedRef = useRef(true);
 
+  // ✅ keep goToNotes at component scope (NOT inside auth callback)
+  const goToNotes = () => setRoute("Notes");
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -114,6 +118,7 @@ export default function Student({ onOpenAuth, setRoute }) {
         (...args) => {
           if (mountedRef.current) setter(...args);
         };
+
       const setLoadingSafe = safeSet(setLoading);
       const setLatestNotesSafe = safeSet(setLatestNotes);
       const setLatestAnnouncementsSafe = safeSet(setLatestAnnouncements);
@@ -140,8 +145,8 @@ export default function Student({ onOpenAuth, setRoute }) {
                   .slice()
                   .sort(
                     (a, b) =>
-                      safeToDate(b.createdAt).getTime() -
-                      safeToDate(a.createdAt).getTime(),
+                      safeToDate(b?.createdAt).getTime() -
+                      safeToDate(a?.createdAt).getTime(),
                   )
                   .slice(0, 5)
               : [];
@@ -156,8 +161,8 @@ export default function Student({ onOpenAuth, setRoute }) {
               .slice()
               .sort(
                 (a, b) =>
-                  safeToDate(b.createdAt).getTime() -
-                  safeToDate(a.createdAt).getTime(),
+                  safeToDate(b?.createdAt).getTime() -
+                  safeToDate(a?.createdAt).getTime(),
               )
               .slice(0, 5);
             setLatestAnnouncementsSafe(latestAnns);
@@ -165,7 +170,7 @@ export default function Student({ onOpenAuth, setRoute }) {
             setLatestAnnouncementsSafe([]);
           }
 
-          // Guest defaults (no validation, hide score card)
+          // Guest defaults
           setBoardSafe("—");
           setExamYearSafe("—");
           setIsValidatedSafe(false);
@@ -200,7 +205,6 @@ export default function Student({ onOpenAuth, setRoute }) {
           );
           setExamYearSafe(dbUser?.ExamYEar ? String(dbUser?.ExamYEar) : "—");
 
-          // NEW: set validation flag
           setIsValidatedSafe(Boolean(dbUser?.is_validated));
 
           setDataSafe((prev) => ({
@@ -216,33 +220,23 @@ export default function Student({ onOpenAuth, setRoute }) {
           setIsValidatedSafe(false);
         }
 
-        // 2) Latest notes
+        // 2) Latest notes (keep newest-first here; render will show Free/Premium)
         const notesUrl = `${baseUrl}/api/notes?uid=${encodeURIComponent(
           user.uid,
         )}&limit=5`;
         const notesRes = await fetch(notesUrl);
         if (notesRes.ok) {
           const notes = await notesRes.json();
-
           const latest = Array.isArray(notes)
             ? notes
                 .slice()
-                .sort((a, b) => {
-                  const nameA = (
-                    a.noteName ||
-                    a.originalName ||
-                    ""
-                  ).toLowerCase();
-                  const nameB = (
-                    b.noteName ||
-                    b.originalName ||
-                    ""
-                  ).toLowerCase();
-                  return nameA.localeCompare(nameB);
-                })
+                .sort(
+                  (a, b) =>
+                    safeToDate(b?.createdAt).getTime() -
+                    safeToDate(a?.createdAt).getTime(),
+                )
                 .slice(0, 5)
             : [];
-
           setLatestNotesSafe(latest);
         } else {
           setLatestNotesSafe([]);
@@ -256,8 +250,8 @@ export default function Student({ onOpenAuth, setRoute }) {
             .slice()
             .sort(
               (a, b) =>
-                safeToDate(b.createdAt).getTime() -
-                safeToDate(a.createdAt).getTime(),
+                safeToDate(b?.createdAt).getTime() -
+                safeToDate(a?.createdAt).getTime(),
             )
             .slice(0, 5);
           setLatestAnnouncementsSafe(latestAnns);
@@ -299,15 +293,15 @@ export default function Student({ onOpenAuth, setRoute }) {
       const mark = Number(lastScore) || 0;
       const grade = getGrade(mark);
 
-      const boardNameEn = (board || "").trim(); // e.g., "Jessore"
-      const examYearStr = String(examYear || "").trim(); // e.g., "2025"
+      const boardNameEn = (board || "").trim();
+      const examYearStr = String(examYear || "").trim();
       const examTitle = "Higher Secondary Certificate (HSC)";
       const subjectTitle = "ICT MCQ Assessment";
 
-      // OPTIONAL fields — if empty/undefined, they will be hidden
-      const rollNo = undefined; // e.g., dbUser.rollNo
-      const regNo = undefined; // e.g., dbUser.regNo
-      const centerName = undefined; // e.g., dbUser.center
+      // OPTIONAL fields
+      const rollNo = undefined;
+      const regNo = undefined;
+      const centerName = undefined;
       const sessionStr = examYearStr
         ? `${Number(examYearStr) - 1}-${examYearStr}`
         : undefined;
@@ -361,16 +355,14 @@ export default function Student({ onOpenAuth, setRoute }) {
 
       // Header text — WEBSITE, not Board
       const headerLeft = logoX + logoSize + 20;
-      const headerRightMargin = 24; // safe padding to the right edge
-      const headerMaxWidth = W - headerLeft - headerRightMargin - 36; // inside inner border
+      const headerRightMargin = 24;
+      const headerMaxWidth = W - headerLeft - headerRightMargin - 36;
 
-      // Title line
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...DARK);
       doc.setFontSize(15);
       doc.text("Mastermind (Website)", headerLeft, 65);
 
-      // Subtitle line (wrapped to avoid overflow)
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(12);
@@ -397,7 +389,7 @@ export default function Student({ onOpenAuth, setRoute }) {
         { align: "center" },
       );
 
-      // ---- Serial Row (left only; QR removed) ----
+      // ---- Serial Row ----
       const infoX = 52;
       const infoY = 210;
       doc.setFont("helvetica", "normal");
@@ -438,16 +430,15 @@ export default function Student({ onOpenAuth, setRoute }) {
       doc.setFontSize(12);
       doc.text("Candidate Details & Result", cardX + 12, cardY + 17);
 
-      // Helpers
       const leftX = cardX + 16;
       const rightX = cardX + cardW / 2 + 8;
       let y = cardY + 54;
       const rowGap = 42;
 
       const addField = (label, value, x, yPos) => {
-        if (value === undefined || value === null) return yPos; // hide
+        if (value === undefined || value === null) return yPos;
         const str = String(value).trim();
-        if (!str) return yPos; // hide empty/whitespace
+        if (!str) return yPos;
         doc.setFont("helvetica", "normal");
         doc.setTextColor(...GREY);
         doc.setFontSize(11);
@@ -459,13 +450,13 @@ export default function Student({ onOpenAuth, setRoute }) {
         return yPos + rowGap;
       };
 
-      // Left column (conditionally show)
+      // Left column
       y = addField("Candidate Name", studentName, leftX, y);
       y = addField("Roll No.", rollNo, leftX, y);
       y = addField("Registration No.", regNo, leftX, y);
       y = addField("Session", sessionStr, leftX, y);
 
-      // Right column (conditionally show)
+      // Right column
       let ry = cardY + 54;
       ry = addField("Board", boardNameEn || undefined, rightX, ry);
       ry = addField("Exam Year", examYearStr || undefined, rightX, ry);
@@ -542,7 +533,7 @@ export default function Student({ onOpenAuth, setRoute }) {
         "(Authorized Signature)",
       );
 
-      // ---- Footer note (explicit website issuance) ----
+      // ---- Footer note ----
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...GREY);
       doc.setFontSize(9);
@@ -564,7 +555,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       setDownloading(false);
     }
   }
-  ``;
 
   if (loading) {
     return (
@@ -601,9 +591,9 @@ export default function Student({ onOpenAuth, setRoute }) {
           >
             Continue MCQs
           </button>
-          {/* Made teal to match your theme */}
+
           <button
-            onClick={() => setRoute("Notes")}
+            onClick={goToNotes}
             className="rounded-xl bg-[var(--mm-teal)] text-white py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)] active:translate-y-px transition"
           >
             Read PDFs
@@ -612,7 +602,6 @@ export default function Student({ onOpenAuth, setRoute }) {
       </motion.section>
 
       {/* Last Exam Score + Grade + Download Certificate Button */}
-      {/* ONLY show if backend says the user is validated */}
       {isValidated && (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
@@ -650,8 +639,7 @@ export default function Student({ onOpenAuth, setRoute }) {
                 Your most recent MCQ performance.
               </p>
 
-              {/* Download button INSIDE the mark card */}
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   Board:{" "}
                   <span className="font-medium text-gray-700 dark:text-gray-200">
@@ -663,6 +651,7 @@ export default function Student({ onOpenAuth, setRoute }) {
                     {examYear || "—"}
                   </span>
                 </div>
+
                 <button
                   onClick={handleDownloadCertificate}
                   disabled={downloading}
@@ -681,25 +670,61 @@ export default function Student({ onOpenAuth, setRoute }) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="rounded-xl2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 shadow-soft"
+        onClick={goToNotes}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") goToNotes();
+        }}
+        className="rounded-xl2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 shadow-soft cursor-pointer"
       >
-        <h3 className="font-semibold">Available Chapters</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold">Available Chapters</h3>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            Tap to open Notes →
+          </span>
+        </div>
+
         <ul className="mt-3 space-y-2 text-sm">
           {top5Notes.length > 0 ? (
-            top5Notes.map((n) => (
-              <li
-                key={
-                  n.id ||
-                  n._id ||
-                  `${n.originalName}-${n.storagePath || n.downloadURL || Math.random()}`
-                }
-                className="flex items-center justify-between"
-              >
-                <span className="truncate mr-3">
-                  {n.noteName || n.originalName}
-                </span>
-              </li>
-            ))
+            top5Notes.map((n) => {
+              const isFree = Boolean(n?.isPublic);
+
+              return (
+                <li
+                  key={
+                    n.id ||
+                    n._id ||
+                    `${n.originalName}-${n.storagePath || n.downloadURL || "x"}`
+                  }
+                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/40"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToNotes();
+                  }}
+                >
+                  <span className="truncate">
+                    {n.noteName || n.originalName}
+                  </span>
+
+                  <span
+                    className={[
+                      "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+                      isFree
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+                    ].join(" ")}
+                    title={
+                      isFree
+                        ? "This chapter is free"
+                        : "This chapter is premium"
+                    }
+                  >
+                    {isFree ? "Free" : "Premium"}
+                  </span>
+                </li>
+              );
+            })
           ) : (
             <li className="text-gray-500 dark:text-gray-400">
               No notes found.
@@ -739,6 +764,85 @@ export default function Student({ onOpenAuth, setRoute }) {
             </li>
           )}
         </ul>
+      </motion.section>
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="rounded-xl2 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-soft overflow-hidden"
+      >
+        {/* Top Image */}
+        <img
+          src="/ictbanner.jpg"
+          alt="ICT Mastermind Banner"
+          className="w-full h-48 sm:h-64 object-cover"
+        />
+
+        {/* Content */}
+        <div className="p-6 space-y-4">
+          {/* Center Content */}
+          <div className="text-center space-y-3">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white">
+              ICT Mastermind
+            </h1>
+
+            <p className="text-lg font-semibold text-[var(--mm-teal)]">
+              {auth.currentUser
+                ? "Continue Your HSC ICT Journey!"
+                : "Unlock Your HSC ICT Potential!"}
+            </p>
+
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
+              HSC ICT Learning & Exam Preparation Platform
+            </p>
+
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              HSC ICT Preparation, Smart Tips & Exam Hacks – সব এক জায়গায়!
+              <br />
+              Board Exam Ready হতে আজই শুরু করো।
+            </p>
+
+            {!auth.currentUser && (
+              <button
+                onClick={onOpenAuth}
+                className="mt-3 rounded-xl bg-[var(--mm-teal)] px-6 py-2 text-sm font-semibold text-white shadow-soft hover:bg-[var(--mm-teal-dark)] transition"
+              >
+                📚 Join Now & Master HSC ICT Like a Pro!
+              </button>
+            )}
+          </div>
+
+          {/* Bottom Section */}
+          <div className="pt-6 border-t border-gray-200 dark:border-gray-800">
+            {/* Social Links - Bottom Left & Larger */}
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
+              <div className="flex gap-6 text-base font-medium">
+                <a
+                  href="https://facebook.com/ictmastermindbd"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gray-700 dark:text-gray-300 hover:text-[var(--mm-teal)] transition"
+                >
+                  🔵 Facebook Page
+                </a>
+
+                <a
+                  href="https://ictmastermind.com"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-gray-700 dark:text-gray-300 hover:text-[var(--mm-teal)] transition"
+                >
+                  🌐 Website
+                </a>
+              </div>
+
+              {/* Copyright Right Side */}
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                © 2026 ICT Mastermind. All Rights Reserved
+              </span>
+            </div>
+          </div>
+        </div>
       </motion.section>
     </div>
   );
