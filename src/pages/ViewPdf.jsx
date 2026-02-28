@@ -1,5 +1,13 @@
 // ViewPdf.jsx (FULL SCREEN + PINCH ZOOM + PAN + SWIPE PAGE)
 // + Go To Page inside bottom black bar
+// + Desktop keyboard zoom: + / - / 0
+// + Responsive fit:
+//    - Desktop: prefer FULL HEIGHT (show full page)
+//    - Android: prefer FULL WIDTH
+//    - Uses PDF aspect ratio to auto-switch if preferred fit would crop
+// + Maintain quality on zoom:
+//    - Keep zoom/pan via react-zoom-pan-pinch (no blur-causing CSS upscale fix needed)
+//    - Increase react-pdf canvas resolution with devicePixelRatio based on current zoom
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -17,10 +25,23 @@ export default function ViewPdf({ fileName, onBack }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadError, setLoadError] = useState(null);
 
+  // content area between bars
   const containerRef = useRef(null);
-  const [containerWidth, setContainerWidth] = useState(1);
+  const [containerSize, setContainerSize] = useState({ w: 1, h: 1 });
 
   const [isZoomed, setIsZoomed] = useState(false);
+
+  // Track current zoom scale (from TransformWrapper) to boost PDF render quality
+  const [zoomScale, setZoomScale] = useState(1);
+
+  // PDF page natural size (for aspect ratio)
+  const [pageDims, setPageDims] = useState({ w: null, h: null });
+
+  // Detect Android
+  const isAndroid = useMemo(() => {
+    if (typeof navigator === "undefined") return false;
+    return /Android/i.test(navigator.userAgent || "");
+  }, []);
 
   // ---------- Go To Page ----------
   const [isGotoOpen, setIsGotoOpen] = useState(false);
@@ -82,12 +103,17 @@ export default function ViewPdf({ fileName, onBack }) {
     };
   }, []);
 
-  // ---------- Resize ----------
+  // ---------- Resize (measure between bars) ----------
   useEffect(() => {
     if (!containerRef.current) return;
     const node = containerRef.current;
 
-    const update = () => setContainerWidth(Math.max(1, node.clientWidth - 24));
+    const update = () => {
+      setContainerSize({
+        w: Math.max(1, node.clientWidth),
+        h: Math.max(1, node.clientHeight),
+      });
+    };
 
     update();
     const ro = new ResizeObserver(() => requestAnimationFrame(update));
@@ -122,21 +148,43 @@ export default function ViewPdf({ fileName, onBack }) {
   useEffect(() => {
     zoomApiRef.current?.resetTransform?.();
     setIsZoomed(false);
+    setZoomScale(1);
   }, [currentPage]);
 
-  // ---------- Keyboard ----------
+  // ---------- Keyboard (+ / - / 0) ----------
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === "Escape") {
         if (isGotoOpen) closeGoto();
         else onBack?.();
+        return;
       }
+
       if (!isGotoOpen) {
+        // Page navigation
         if (e.key === "ArrowLeft") prevPage();
         if (e.key === "ArrowRight") nextPage();
+
+        // Zoom controls (use TransformWrapper API)
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault();
+          zoomApiRef.current?.zoomIn?.(0.25);
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          zoomApiRef.current?.zoomOut?.(0.25);
+        }
+        if (e.key === "0") {
+          e.preventDefault();
+          zoomApiRef.current?.resetTransform?.();
+          setIsZoomed(false);
+          setZoomScale(1);
+        }
       }
+
       if (isGotoOpen && e.key === "Enter") applyGoto();
     };
+
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onBack, prevPage, nextPage, isGotoOpen, closeGoto, applyGoto]);
@@ -192,6 +240,45 @@ export default function ViewPdf({ fileName, onBack }) {
 
   const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
 
+  // ---------- Best-fit sizing (with platform preference + PDF AR) ----------
+  const pageAR = useMemo(() => {
+    const w = pageDims.w;
+    const h = pageDims.h;
+    if (!w || !h) return null;
+    return w / h;
+  }, [pageDims]);
+
+  const renderSize = useMemo(() => {
+    const cw = Math.max(1, containerSize.w);
+    const ch = Math.max(1, containerSize.h);
+
+    if (!pageAR) {
+      return isAndroid
+        ? { mode: "width", width: cw }
+        : { mode: "height", height: ch };
+    }
+
+    const preferred = isAndroid ? "width" : "height";
+
+    if (preferred === "width") {
+      const hByWidth = cw / pageAR;
+      if (hByWidth <= ch) return { mode: "width", width: cw };
+      return { mode: "height", height: ch };
+    } else {
+      const wByHeight = ch * pageAR;
+      if (wByHeight <= cw) return { mode: "height", height: ch };
+      return { mode: "width", width: cw };
+    }
+  }, [containerSize, pageAR, isAndroid]);
+
+  // ---------- Quality: devicePixelRatio boosted by zoom ----------
+  const devicePixelRatio = useMemo(() => {
+    const base =
+      typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    // Boost DPR as you zoom to keep it crisp, but cap for performance/memory
+    return Math.max(1, Math.min(4, base * (zoomScale || 1) * 1.25));
+  }, [zoomScale]);
+
   if (!fileUrl) return null;
 
   return (
@@ -205,10 +292,10 @@ export default function ViewPdf({ fileName, onBack }) {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* PDF */}
+      {/* PDF (ONLY between bars) */}
       <div
         ref={containerRef}
-        className="absolute inset-0 flex items-center justify-center"
+        className="absolute left-0 right-0 top-16 bottom-16 flex items-center justify-center"
       >
         {loadError ? (
           <div className="text-white/80 text-sm p-4">{loadError}</div>
@@ -224,8 +311,18 @@ export default function ViewPdf({ fileName, onBack }) {
               maxScale={4}
               centerOnInit
               onInit={(api) => (zoomApiRef.current = api)}
-              onZoomStop={(api) => setIsZoomed(api.state.scale > 1.01)}
-              onTransformed={(api) => setIsZoomed(api.state.scale > 1.01)}
+              // keep swipe enabled only when not zoomed
+              onZoomStop={(api) => {
+                const s = api?.state?.scale || 1;
+                setZoomScale(s);
+                setIsZoomed(s > 1.01);
+              }}
+              onTransformed={(api) => {
+                const s = api?.state?.scale || 1;
+                // keep it smooth but responsive
+                setZoomScale(s);
+                setIsZoomed(s > 1.01);
+              }}
               doubleClick={{ mode: "zoomIn" }}
               wheel={{ disabled: true }}
             >
@@ -241,7 +338,25 @@ export default function ViewPdf({ fileName, onBack }) {
               >
                 <Page
                   pageNumber={currentPage}
-                  width={containerWidth}
+                  // Capture natural page size for aspect ratio
+                  onLoadSuccess={(page) => {
+                    try {
+                      const v = page?.view; // [xMin, yMin, xMax, yMax]
+                      if (Array.isArray(v) && v.length === 4) {
+                        const w = Math.abs(v[2] - v[0]);
+                        const h = Math.abs(v[3] - v[1]);
+                        if (w > 0 && h > 0) setPageDims({ w, h });
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  // Fit: Android prefer width, Desktop prefer height, auto-switch if needed
+                  {...(renderSize.mode === "width"
+                    ? { width: renderSize.width }
+                    : { height: renderSize.height })}
+                  // Quality boost (crisper when zooming)
+                  devicePixelRatio={devicePixelRatio}
                   renderTextLayer={false}
                   renderAnnotationLayer={true}
                 />
@@ -268,7 +383,7 @@ export default function ViewPdf({ fileName, onBack }) {
       {/* Bottom Black Bar */}
       <div className="absolute bottom-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-4 bg-black/70">
         <div className="text-xs text-white/70">
-          {isZoomed ? "Pinch • Drag • Double tap" : "Swipe ← / →"}
+          {isZoomed ? "Pinch • Drag • Double tap" : "Swipe ← / →"} | Zoom: + / -
         </div>
 
         <button
