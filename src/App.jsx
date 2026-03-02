@@ -171,16 +171,7 @@ export default function App() {
           onOpenAuth={() => setAuthOpen(true)}
         />
       ),
-      takeExam: currentUser?.is_validated ? (
-        <TakeExam currentUser={currentUser} />
-      ) : (
-        <Student
-          currentUser={currentUser}
-          setRoute={setRoute}
-          openPdf={openPdf}
-          onOpenAuth={() => setAuthOpen(true)}
-        />
-      ),
+      takeExam: <TakeExam currentUser={currentUser} />,
       addAnnouncement: currentUser?.is_Admin ? (
         <AddAnnouncement />
       ) : (

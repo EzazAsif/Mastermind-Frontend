@@ -19,10 +19,10 @@ export default function Sidebar({ route, onChange, user }) {
       <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-soft p-2 w-[240px]">
         <ul className="space-y-1">
           {TABS.filter((t) => {
-            if (t.id === "ViewPdf") return false; // hide ViewPdf
+            if (t.id === "ViewPdf") return false;
 
-            // takeExam only if validated
-            if (t.id === "takeExam" && !user?.is_validated) return false;
+            // ✅ ALWAYS show takeExam (no validation, no user check)
+            if (t.id === "takeExam") return true;
 
             // Admin-only tabs
             if (adminTabs.includes(t.id) && !user?.is_Admin) return false;

@@ -538,17 +538,16 @@ export default function Student({ onOpenAuth, setRoute }) {
         </p>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
-            onClick={() => setRoute("takeExam")}
-            className="rounded-xl bg-[var(--mm-teal)] text-white py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)] active:translate-y-px transition"
-          >
-            Continue MCQs
-          </button>
-
-          <button
             onClick={goToNotes}
             className="rounded-xl bg-[var(--mm-teal)] text-white py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)] active:translate-y-px transition"
           >
             Read PDFs
+          </button>
+          <button
+            onClick={() => setRoute("takeExam")}
+            className="rounded-xl bg-[var(--mm-teal)] text-white py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)] active:translate-y-px transition"
+          >
+            Continue MCQs
           </button>
         </div>
       </motion.section>

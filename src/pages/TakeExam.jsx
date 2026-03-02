@@ -1,14 +1,12 @@
 // TakeExam.jsx
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { auth } from "../lib/firebase";
+import ValidationModal from "../components/ValidationModal.jsx";
+import AuthModal from "../components/AuthModal.jsx";
 
 /* ===========================================
    Stable Key Helpers (no randomness)
-   -------------------------------------------
-   1) Prefer q._id or q.id from server
-   2) If grouped: use setId + setOrder
-   3) Otherwise: hash the essential content
 =========================================== */
 function hashString(s) {
   let h1 = 0xdeadbeef,
@@ -40,52 +38,207 @@ function stableIdFromQuestion(q) {
     src: q?.src ?? "",
     examId: q?.examId ?? q?.exam ?? "",
   });
+
   return `hash:${hashString(payload)}`;
+}
+
+/** exam_taken formats supported:
+ *  - {"taken": true}
+ *  - true
+ *  - "true"
+ */
+function readExamTaken(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return false;
+    if (raw === "true") return true;
+    const v = JSON.parse(raw);
+    return v === true || v?.taken === true;
+  } catch {
+    return false;
+  }
+}
+
+function writeExamTaken(key) {
+  try {
+    localStorage.setItem(
+      key,
+      JSON.stringify({ taken: true, takenAt: new Date().toISOString() }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// serverUser.is_validated can be true/false, 1/0, "true"/"false"
+function isUserValidated(serverUser) {
+  const raw = serverUser?.is_validated;
+  return raw === true || raw === 1 || raw === "true";
 }
 
 export default function TakeExam() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
-  const [timeLeft, setTimeLeft] = useState(900); // 15 min = 900s
+  const [timeLeft, setTimeLeft] = useState(900);
   const [submitted, setSubmitted] = useState(false);
   const [score, setScore] = useState(null);
-  const [uid, setUid] = useState(null); // Firebase user UID
+
+  const [authReady, setAuthReady] = useState(false);
+  const [uid, setUid] = useState(null);
+
+  const [serverUser, setServerUser] = useState(null);
+  const [userLoading, setUserLoading] = useState(false);
+
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+
   const timerRef = useRef();
 
-  // Change this if your API origin differs in dev/prod
   const API_ORIGIN = "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+  const EXAM_TAKEN_KEY = "exam_taken";
 
-  // Get current user UID
+  // ---- Auth: optional (exam can run without login) ----
   useEffect(() => {
-    const user = auth.currentUser;
-    if (user) {
-      setUid(user.uid);
-      return;
-    }
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      if (u) setUid(u.uid);
+    const unsub = auth.onAuthStateChanged((u) => {
+      setUid(u?.uid || null);
+      setAuthReady(true);
     });
-    return unsubscribe;
+    return unsub;
   }, []);
 
-  /* =========================
-     Fetch exams & assemble questions
-     1) Try server-assembled endpoint (/exams/assembled)
-     2) Fallback to client-side assembly (block-aware)
-     NOTE: All questions receive a deterministic, stable _id.
-  ========================== */
+  // ---- Fetch server user ONLY if logged in ----
+  const fetchServerUser = async (uidToFetch) => {
+    const res = await fetch(`${API_ORIGIN}/api/users/${uidToFetch}`);
+    if (!res.ok) throw new Error("Failed to fetch user");
+    return await res.json();
+  };
+
+  useEffect(() => {
+    if (!authReady) return;
+
+    if (!uid) {
+      setServerUser(null);
+      setUserLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setUserLoading(true);
+
+    (async () => {
+      try {
+        const data = await fetchServerUser(uid);
+        if (!cancelled) setServerUser(data);
+      } catch {
+        if (!cancelled) setServerUser(null);
+      } finally {
+        if (!cancelled) setUserLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authReady, uid]);
+
+  // ---- Derived rules ----
+  const examTaken = useMemo(() => readExamTaken(EXAM_TAKEN_KEY), [submitted]);
+
+  // We only *know* validation status after fetch finishes when logged in.
+  // If not logged in, it's immediately known (not validated).
+  const validatedReady = useMemo(() => {
+    if (!uid) return true;
+    return !userLoading;
+  }, [uid, userLoading]);
+
+  const validated = useMemo(() => {
+    if (!uid) return false; // not logged in -> cannot be validated
+    if (!validatedReady) return false; // unknown yet
+    return isUserValidated(serverUser);
+  }, [uid, validatedReady, serverUser]);
+
+  // ✅ Allow exam if:
+  // - validated user (always)
+  // - OR flag not taken yet (everyone once)
+  // - OR just submitted in this session (so they can see score/result)
+  const canTakeExam = validated || !examTaken || submitted;
+
+  // ✅ Block only if:
+  // - flag taken AND NOT validated
+  // - AND NOT currently showing result
+  // - AND validation status is READY (prevents instant popup while loading)
+  const shouldBlock = examTaken && !validated && !submitted && validatedReady;
+
+  // ---- Modal behavior when blocked ----
+  useEffect(() => {
+    if (!shouldBlock) {
+      setShowValidationModal(false);
+      setLoginOpen(false);
+      return;
+    }
+
+    // blocked + NOT logged in -> show login modal
+    if (!uid) {
+      setLoginOpen(true);
+      setShowValidationModal(false);
+      return;
+    }
+
+    // blocked + logged in -> wait until user fetch completes
+    if (!validatedReady) return;
+
+    setShowValidationModal(true);
+    setLoginOpen(false);
+  }, [shouldBlock, uid, validatedReady]);
+
+  // Modal open failure log (only when it SHOULD open)
+  useEffect(() => {
+    if (!shouldBlock) return;
+
+    if (!uid && !loginOpen) {
+      console.log("[MODAL OPEN FAIL] expected AuthModal", {
+        examTaken,
+        validated,
+        uid,
+        serverUser,
+        userLoading,
+        localStorage: localStorage.getItem(EXAM_TAKEN_KEY),
+      });
+    }
+
+    if (uid && validatedReady && !showValidationModal) {
+      console.log("[MODAL OPEN FAIL] expected ValidationModal", {
+        examTaken,
+        validated,
+        uid,
+        serverUser,
+        userLoading,
+        localStorage: localStorage.getItem(EXAM_TAKEN_KEY),
+      });
+    }
+  }, [
+    shouldBlock,
+    uid,
+    validatedReady,
+    showValidationModal,
+    loginOpen,
+    examTaken,
+    validated,
+    serverUser,
+    userLoading,
+  ]);
+
+  // ---- Fetch questions if allowed (no need for login) ----
   useEffect(() => {
     let cancelled = false;
 
     async function fetchQuestions() {
+      if (!canTakeExam) return;
+
       try {
-        // ---- 1) Try server-side assembly ----
         const assembled = await axios.get(`${API_ORIGIN}/exams/assembled`, {
-          params: {
-            base: 25, // base per exam
-            max: 100, // cap
-            absoluteImages: true, // server normalizes image paths
-          },
+          params: { base: 25, max: 100, absoluteImages: true },
         });
 
         const list = (assembled.data?.questions || []).map((q) => ({
@@ -94,129 +247,8 @@ export default function TakeExam() {
         }));
 
         if (!cancelled) setQuestions(list);
-        return;
-      } catch (e) {
-        console.warn(
-          "Server assembly not available, falling back to client assembly.",
-          e?.message,
-        );
-      }
-
-      // ---- 2) Fallback: client-side assembly (block-aware) ----
-      try {
-        const res = await axios.get(`${API_ORIGIN}/exams`);
-        const exams = res.data || [];
-
-        const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
-
-        // Build blocks for an exam: arrays of questions
-        const buildBlocksForExam = (exam) => {
-          const groups = new Map();
-          const singles = [];
-
-          for (const q of exam.questions || []) {
-            if (q?.setId) {
-              if (!groups.has(q.setId)) groups.set(q.setId, []);
-              groups.get(q.setId).push(q);
-            } else {
-              singles.push([q]);
-            }
-          }
-
-          const blocks = [];
-          // sort inside sets by setOrder
-          for (const [, arr] of groups.entries()) {
-            arr.sort(
-              (a, b) =>
-                (Number.isFinite(a?.setOrder) ? a.setOrder : 0) -
-                (Number.isFinite(b?.setOrder) ? b.setOrder : 0),
-            );
-            blocks.push(arr);
-          }
-          // add singles
-          blocks.push(...singles);
-          return blocks;
-        };
-
-        // Pick blocks greedily without splitting; if nothing fits pick the smallest
-        const pickBlocks = (blocks, target) => {
-          if (target <= 0) return [];
-          const pool = shuffle(blocks);
-          const picked = [];
-          let count = 0;
-
-          for (const block of pool) {
-            if (count + block.length <= target) {
-              picked.push(block);
-              count += block.length;
-            }
-          }
-
-          // If nothing fit, pick the smallest once to ensure progress
-          if (picked.length === 0 && pool.length && target > 0) {
-            const smallest = [...pool].sort((a, b) => a.length - b.length)[0];
-            picked.push(smallest);
-          }
-
-          return picked;
-        };
-
-        let allBlocks = [];
-        const BASE = 25;
-
-        for (const exam of exams) {
-          const blocks = buildBlocksForExam(exam);
-          const targetCount = Math.round(
-            (BASE * (exam.questionPercentage || 0)) / 100,
-          );
-          const chosen = pickBlocks(blocks, targetCount);
-          allBlocks.push(...chosen);
-        }
-
-        // Shuffle blocks globally (keeps internal set order intact)
-        allBlocks = shuffle(allBlocks);
-
-        // Cap to 100 without splitting sets
-        const MAX_Q = 100;
-        const final = [];
-        let used = 0;
-
-        for (const block of allBlocks) {
-          if (used + block.length <= MAX_Q) {
-            final.push(...block);
-            used += block.length;
-          } else if (used === 0) {
-            // If first block alone exceeds cap, include it to avoid empty exam
-            final.push(...block);
-            break;
-          } else {
-            // skip block to avoid splitting sets
-            continue;
-          }
-        }
-
-        // Normalize images to absolute and ensure stable _id
-        const normalized = final.map((q) => {
-          let img = null;
-          const src = (q.image || "").trim();
-
-          if (src) {
-            if (src.startsWith("/uploads")) img = `${API_ORIGIN}${src}`;
-            else if (/^https?:\/\//i.test(src)) img = src;
-            else img = `${API_ORIGIN}/${src.replace(/^\/?/, "")}`;
-          }
-
-          const withImg = { ...q, image: img };
-          return {
-            ...withImg,
-            _id: stableIdFromQuestion(withImg),
-          };
-        });
-
-        if (!cancelled) setQuestions(normalized);
-      } catch (err) {
-        console.error("Failed to load questions:", err);
-        if (!cancelled) alert("Error loading questions");
+      } catch {
+        if (!cancelled) alert("Failed to load exam");
       }
     }
 
@@ -224,11 +256,12 @@ export default function TakeExam() {
     return () => {
       cancelled = true;
     };
-  }, [API_ORIGIN]);
+  }, [API_ORIGIN, canTakeExam]);
 
-  // Timer
+  // ---- Timer ----
   useEffect(() => {
     if (!questions.length || submitted) return;
+    if (!canTakeExam) return;
 
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -242,14 +275,19 @@ export default function TakeExam() {
     }, 1000);
 
     return () => clearInterval(timerRef.current);
-  }, [questions, submitted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions, submitted, canTakeExam]);
 
   const handleChange = (qId, optIndex) => {
     setAnswers((prev) => ({ ...prev, [qId]: Number(optIndex) }));
   };
 
+  // ---- Submit: set flag always; update score only if logged in ----
   const handleSubmit = async () => {
-    if (submitted) return; // prevent double submit
+    if (submitted) return;
+
+    // set the "taken" flag immediately
+    writeExamTaken(EXAM_TAKEN_KEY);
 
     let correct = 0;
     questions.forEach((q) => {
@@ -261,27 +299,56 @@ export default function TakeExam() {
     setScore(percentage);
     setSubmitted(true);
 
-    if (!uid) {
-      console.warn("Cannot update score, UID not found.");
-      return;
-    }
+    // Only update score if logged in
+    if (!uid) return;
 
     try {
       await axios.put(`${API_ORIGIN}/api/users/${uid}/score`, {
-        score: percentage, // send numeric score
+        score: percentage,
       });
-      console.log("User score updated!");
-    } catch (err) {
-      console.error("Failed to update user score:", err);
-    }
+    } catch {}
   };
 
-  if (!questions.length) return <p>Loading exam...</p>;
+  // -----------------------
+  // UI
+  // -----------------------
+  if (!canTakeExam) {
+    return (
+      <>
+        <AuthModal open={loginOpen} onClose={() => setLoginOpen(false)} />
 
-  const minutes = Math.floor(timeLeft / 60)
-    .toString()
-    .padStart(2, "0");
-  const seconds = (timeLeft % 60).toString().padStart(2, "0");
+        <ValidationModal
+          isOpen={showValidationModal}
+          onClose={() => {}}
+          onSuccess={async () => {
+            if (!uid) return;
+            try {
+              const data = await fetchServerUser(uid);
+              setServerUser(data);
+            } catch {}
+          }}
+        />
+
+        <div className="p-6 max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold mb-2">Exam Locked</h2>
+          <p className="text-gray-600">
+            You already took the exam once. Subscribe (validate) to take
+            unlimited exams.
+          </p>
+
+          {/* optional: show loading state if logged in and checking */}
+          {uid && !validatedReady && (
+            <p className="mt-3 text-sm text-gray-500">Checking your account…</p>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  if (!questions.length) return <p className="p-6">Loading exam...</p>;
+
+  const minutes = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+  const seconds = String(timeLeft % 60).padStart(2, "0");
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
@@ -302,23 +369,6 @@ export default function TakeExam() {
       >
         {questions.map((q, idx) => (
           <div key={q._id} className="mb-6 border p-4 rounded-lg">
-            {/* 🖼️ Optional Image */}
-            {q.image && (
-              <div className="mb-3">
-                <img
-                  src={q.image}
-                  alt={`Question ${idx + 1}`}
-                  className="max-h-64 mx-auto object-contain rounded-md border"
-                  loading="lazy"
-                  onError={(e) => {
-                    // hide broken images gracefully to avoid layout jumpiness
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
-              </div>
-            )}
-
-            {/* ✅ Multiline + Bangla-friendly rendering */}
             <div
               className="font-medium mb-2"
               style={{ whiteSpace: "pre-line" }}
@@ -326,7 +376,6 @@ export default function TakeExam() {
               {`Q${idx + 1}. ${q.text || ""}`}
             </div>
 
-            {/* Options */}
             {q.options.map((opt, i) => (
               <label key={i} className="block mb-1 cursor-pointer">
                 <input

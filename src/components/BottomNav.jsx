@@ -19,7 +19,12 @@ export default function BottomNav({ route, onChange, user }) {
     >
       {TABS.filter((t) => {
         if (t.id === "ViewPdf") return false;
-        if (t.id === "takeExam" && !user?.is_validated) return false;
+
+        // ✅ ALWAYS show takeExam (no validation, no user check)
+        if (t.id === "takeExam") return true;
+
+        // ❌ Removed: if (t.id === "takeExam" && !user?.is_validated) return false;
+
         if (adminTabs.includes(t.id) && !user?.is_Admin) return false;
         if (alwaysVisible.includes(t.id)) return true;
         if (!user) return false;
@@ -33,12 +38,18 @@ export default function BottomNav({ route, onChange, user }) {
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2 relative"
           >
             <span
-              className={`text-lg ${active ? "text-teal-500" : "text-gray-400 dark:text-gray-500"}`}
+              className={`text-lg ${
+                active ? "text-teal-500" : "text-gray-400 dark:text-gray-500"
+              }`}
             >
               {t.icon}
             </span>
             <span
-              className={`text-xs ${active ? "text-teal-500 font-medium" : "text-gray-400 dark:text-gray-500"}`}
+              className={`text-xs ${
+                active
+                  ? "text-teal-500 font-medium"
+                  : "text-gray-400 dark:text-gray-500"
+              }`}
             >
               {t.label}
             </span>

@@ -185,7 +185,7 @@ export default function Header({
             {/* Left: Logo + Title (allow shrink/truncate) */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
               <motion.img
-                src="/mastermind-logo.png"
+                src="/ictbanner.jpg"
                 alt="Mastermind logo"
                 className="h-9 w-9 sm:h-10 sm:w-10 md:h-12 md:w-12 shrink-0"
                 initial={{ opacity: 0, scale: 0.9 }}

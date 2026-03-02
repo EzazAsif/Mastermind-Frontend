@@ -27,7 +27,7 @@ export default function Footer() {
         {/* Left: Logo + Brand */}
         <div className="flex items-center gap-2 min-w-0">
           <img
-            src="/mastermind-logo.png"
+            src="/ictbanner.jpg"
             alt="Mastermind Logo"
             className="h-6 w-6 object-contain shrink-0"
           />
