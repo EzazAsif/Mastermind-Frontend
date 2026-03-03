@@ -16,41 +16,87 @@ function djb2(str = "") {
 function stableAnnouncementId(a) {
   if (a?._id) return String(a._id);
   if (a?.id) return String(a.id);
+
   const base = [
     a?.title ?? "",
     a?.content ?? "",
-    a?.createdAt ? new Date(a.createdAt).toISOString() : "",
+    a?.createdAt ? JSON.stringify(a.createdAt) : "",
   ].join("||");
+
   return `ann-${djb2(base)}`;
 }
 /* --------------------------------------- */
 
-/** Safe date converter for Firestore Timestamp / {seconds} / string / Date */
-function safeToDate(input, fallback = new Date(0)) {
+/** Safe date converter for Firestore Timestamp / {seconds} / {_seconds} / Mongo {$date} / nested / string / number / Date */
+function safeToDate(input, fallback = null) {
   try {
     if (!input) return fallback;
+
+    // Already a Date
+    if (input instanceof Date) {
+      return isNaN(input.getTime()) ? fallback : input;
+    }
+
+    // Numbers: can be ms or seconds
+    if (typeof input === "number") {
+      const ms = input < 1e12 ? input * 1000 : input; // guess seconds vs ms
+      const d = new Date(ms);
+      return isNaN(d.getTime()) ? fallback : d;
+    }
+
+    // Strings: ISO/date-ish
+    if (typeof input === "string") {
+      const d = new Date(input);
+      return isNaN(d.getTime()) ? fallback : d;
+    }
+
+    // Objects: Firestore Timestamp / serialized forms / Mongo
     if (typeof input === "object") {
+      // Firestore Timestamp object
       if (typeof input.toDate === "function") {
         const d = input.toDate();
         return isNaN(d?.getTime()) ? fallback : d;
       }
+
+      // Firestore serialized
       if (typeof input.seconds === "number") {
         const d = new Date(input.seconds * 1000);
         return isNaN(d.getTime()) ? fallback : d;
       }
+      if (typeof input._seconds === "number") {
+        const d = new Date(input._seconds * 1000);
+        return isNaN(d.getTime()) ? fallback : d;
+      }
+
+      // Mongo extended JSON: { $date: "..." } or { $date: 1710000000000 }
+      if (input.$date != null) {
+        return safeToDate(input.$date, fallback);
+      }
+
+      // Some APIs nest date
+      if (input.date != null) {
+        return safeToDate(input.date, fallback);
+      }
+
+      // Some APIs use createdAt: { value: "..." }
+      if (input.value != null) {
+        return safeToDate(input.value, fallback);
+      }
     }
-    const d = new Date(input);
-    return isNaN(d.getTime()) ? fallback : d;
+
+    return fallback;
   } catch {
     return fallback;
   }
 }
 
 function safeToLocaleDateString(input, locale) {
+  const d = safeToDate(input, null);
+  if (!d) return "Invalid date";
+
   try {
-    return safeToDate(input, new Date()).toLocaleDateString(locale);
+    return d.toLocaleDateString(locale);
   } catch {
-    const d = safeToDate(input, new Date());
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
       d.getDate(),
     ).padStart(2, "0")}`;
@@ -60,26 +106,29 @@ function safeToLocaleDateString(input, locale) {
 // Helper: top 5 newest by createdAt
 function top5ByCreatedAtDesc(arr) {
   return (Array.isArray(arr) ? arr.slice() : [])
-    .sort(
-      (a, b) =>
-        safeToDate(b?.createdAt).getTime() - safeToDate(a?.createdAt).getTime(),
-    )
+    .sort((a, b) => {
+      const tb = safeToDate(b?.createdAt, new Date(0))?.getTime?.() ?? 0;
+      const ta = safeToDate(a?.createdAt, new Date(0))?.getTime?.() ?? 0;
+      return tb - ta;
+    })
     .slice(0, 5);
 }
 
-const LS_LAST_VISITED_KEY = "announcements:lastVisitedAt"; // NEW
+const LS_LAST_VISITED_KEY = "announcements:lastVisitedAt";
 
 export default function Announcements({ uid, locale }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastVisitedAt, setLastVisitedAt] = useState(null);
 
-  const [lastVisitedAt, setLastVisitedAt] = useState(null); // NEW
+  // Toggle debug logs easily
+  const DEBUG = true;
 
   const API_BASE =
     import.meta.env.VITE_API_URL ||
     "https://ugliest-hannie-ezaz-307892de.koyeb.app";
 
-  // Load lastVisitedAt from localStorage & immediately stamp this visit // NEW
+  // Load lastVisitedAt from localStorage & stamp this visit
   useEffect(() => {
     try {
       const stored = localStorage.getItem(LS_LAST_VISITED_KEY);
@@ -89,7 +138,7 @@ export default function Announcements({ uid, locale }) {
       setLastVisitedAt(null);
     }
 
-    // Stamp current visit time right away for next time
+    // Stamp current visit time for next time
     try {
       localStorage.setItem(LS_LAST_VISITED_KEY, new Date().toISOString());
     } catch {
@@ -105,7 +154,6 @@ export default function Announcements({ uid, locale }) {
       setLoading(true);
 
       try {
-        // Prepare token header if uid present (for PUT)
         let headers = {};
         if (uid) {
           try {
@@ -116,7 +164,6 @@ export default function Announcements({ uid, locale }) {
           }
         }
 
-        // Fire GET immediately; run PUT in parallel (don't block UI)
         const getPromise = axios.get(`${API_BASE}/api/announcements`, {
           cancelToken: source.token,
           timeout: 12000,
@@ -126,11 +173,7 @@ export default function Announcements({ uid, locale }) {
           ? axios.put(
               `${API_BASE}/api/users/${uid}/last-notified`,
               {},
-              {
-                headers,
-                cancelToken: source.token,
-                timeout: 12000,
-              },
+              { headers, cancelToken: source.token, timeout: 12000 },
             )
           : Promise.resolve({ status: 204 });
 
@@ -139,11 +182,11 @@ export default function Announcements({ uid, locale }) {
           putPromise,
         ]);
 
-        // Handle GET
         if (getRes.status === "fulfilled") {
           const arr = Array.isArray(getRes.value?.data)
             ? getRes.value.data
             : [];
+
           if (isActive) setAnnouncements(arr);
         } else if (!axios.isCancel(getRes.reason)) {
           console.error(
@@ -153,7 +196,6 @@ export default function Announcements({ uid, locale }) {
           if (isActive) setAnnouncements([]);
         }
 
-        // Log PUT failure but don't block UI
         if (putRes.status === "rejected" && !axios.isCancel(putRes.reason)) {
           console.error(
             "Failed to update lastNotified:",
@@ -161,9 +203,8 @@ export default function Announcements({ uid, locale }) {
           );
         }
       } catch (e) {
-        if (!axios.isCancel(e)) {
+        if (!axios.isCancel(e))
           console.error("Unexpected announcements flow error:", e);
-        }
         if (isActive) setAnnouncements([]);
       } finally {
         if (isActive) setLoading(false);
@@ -198,11 +239,15 @@ export default function Announcements({ uid, locale }) {
       )}
 
       {top5.map((a) => {
+        // If you want to pause execution to inspect the object:
+        // if (DEBUG && a?.createdAt) debugger;
+
         const created = safeToDate(a?.createdAt, null);
+
         const isNew =
           created && lastVisitedAt
             ? created.getTime() > lastVisitedAt.getTime()
-            : false; // NEW
+            : false;
 
         return (
           <motion.div
@@ -222,10 +267,12 @@ export default function Announcements({ uid, locale }) {
                     </span>
                   )}
                 </div>
+
                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                   {a.content}
                 </p>
               </div>
+
               <span className="ml-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
                 {a?.createdAt
                   ? safeToLocaleDateString(a.createdAt, locale)
