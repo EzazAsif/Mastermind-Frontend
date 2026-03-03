@@ -722,16 +722,19 @@ export default function Student({ onOpenAuth, setRoute }) {
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="rounded-xl2 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-soft overflow-hidden"
+        whileHover={{ y: -4 }}
+        className="rounded-xl2 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-soft hover:shadow-xl transition-all duration-300 overflow-hidden"
       >
-        {/* Banner (show full image) */}
-        <div className="w-full bg-gray-100 dark:bg-gray-800">
-          <img
-            src="/ictbanner.jpg"
-            alt="ICT Mastermind Banner"
-            className="w-full h-40 sm:h-52 object-contain"
-            loading="lazy"
-          />
+        {/* Banner */}
+        <div className="w-full px-6 pt-8 pb-4">
+          <div className="flex justify-center">
+            <img
+              src="/ictbanner.jpg"
+              alt="ICT Mastermind Banner"
+              className="max-h-28 sm:max-h-36 object-contain"
+              loading="lazy"
+            />
+          </div>
         </div>
 
         <div className="p-6 space-y-4">
@@ -759,66 +762,61 @@ export default function Student({ onOpenAuth, setRoute }) {
             {!auth.currentUser && (
               <button
                 onClick={onOpenAuth}
-                className="mt-3 rounded-xl bg-[var(--mm-teal)] px-6 py-2 text-sm font-semibold text-white shadow-soft hover:bg-[var(--mm-teal-dark)] transition"
+                className="mt-3 rounded-xl bg-[var(--mm-teal)] px-6 py-2 text-sm font-semibold text-white shadow-md hover:bg-[var(--mm-teal-dark)] hover:shadow-lg transition"
               >
                 📚 Join Now & Master HSC ICT Like a Pro!
               </button>
             )}
           </div>
 
-          {/* Bottom center: icons + copyright */}
-          <div className="pt-6 border-t border-gray-200 dark:border-gray-800">
-            <div className="flex flex-col items-center justify-center gap-3">
-              <div className="flex items-center justify-center gap-4">
-                <a
-                  href="https://facebook.com/ictmastermindbd"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Facebook"
-                  title="Facebook"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:text-[var(--mm-teal)] hover:border-[var(--mm-teal)] transition"
+          {/* Bottom Section */}
+          <div className="mt-10 flex flex-col items-center gap-6">
+            {/* Icons */}
+            <div className="flex items-center justify-center gap-6">
+              {/* Facebook */}
+              <a
+                href="https://facebook.com/ictmastermindbd"
+                target="_blank"
+                rel="noreferrer"
+                className="group inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 transition-all duration-300 hover:border-[var(--mm-teal)] hover:shadow-[0_0_18px_rgba(0,150,136,0.4)] hover:scale-110"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5 group-hover:text-[var(--mm-teal)] transition-colors"
+                  fill="currentColor"
                 >
-                  {/* Facebook icon */}
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d="M22 12.07C22 6.49 17.52 2 11.93 2 6.35 2 1.86 6.49 1.86 12.07c0 5.04 3.65 9.22 8.44 10.02v-7.1H7.74v-2.92h2.56V9.85c0-2.53 1.5-3.93 3.8-3.93 1.1 0 2.25.2 2.25.2v2.48h-1.27c-1.25 0-1.64.78-1.64 1.57v1.88h2.8l-.45 2.92h-2.35v7.1c4.79-.8 8.44-4.98 8.44-10.02Z" />
-                  </svg>
-                </a>
+                  <path d="M22 12.07C22 6.49 17.52 2 11.93 2 6.35 2 1.86 6.49 1.86 12.07c0 5.04 3.65 9.22 8.44 10.02v-7.1H7.74v-2.92h2.56V9.85c0-2.53 1.5-3.93 3.8-3.93 1.1 0 2.25.2 2.25.2v2.48h-1.27c-1.25 0-1.64.78-1.64 1.57v1.88h2.8l-.45 2.92h-2.35v7.1c4.79-.8 8.44-4.98 8.44-10.02Z" />
+                </svg>
+              </a>
 
-                <a
-                  href="https://ictmastermind.com"
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Website"
-                  title="Website"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:text-[var(--mm-teal)] hover:border-[var(--mm-teal)] transition"
+              {/* Website */}
+              <a
+                href="https://ictmastermind.com"
+                target="_blank"
+                rel="noreferrer"
+                className="group inline-flex h-11 w-11 items-center justify-center rounded-full border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 transition-all duration-300 hover:border-[var(--mm-teal)] hover:shadow-[0_0_18px_rgba(0,150,136,0.4)] hover:scale-110"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5 group-hover:text-[var(--mm-teal)] transition-colors"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
                 >
-                  {/* Globe icon */}
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M2 12h20" />
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z" />
-                  </svg>
-                </a>
-              </div>
-
-              <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                © 2026 ICT Mastermind. All Rights Reserved
-              </span>
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M2 12h20" />
+                  <path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10Z" />
+                </svg>
+              </a>
             </div>
+
+            {/* Full Width Dark Divider */}
+            <div className="w-full h-[2px] bg-black dark:bg-gray-700"></div>
+
+            {/* Copyright */}
+            <span className="text-xs text-gray-600 dark:text-gray-400 text-center">
+              © 2026 ICT Mastermind. All Rights Reserved
+            </span>
           </div>
         </div>
       </motion.section>
