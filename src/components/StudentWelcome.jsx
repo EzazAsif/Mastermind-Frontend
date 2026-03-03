@@ -235,13 +235,15 @@ export default function StudentWelcome({ student, onOpenAuth }) {
 
   const displayName = currentUser
     ? currentUser.displayName || currentUser.email
-    : "Not logged in";
-  const avatarInitial = (displayName?.trim?.()[0] || "?").toUpperCase();
+    : "";
+  const avatarInitial = (displayName?.trim?.()[0] || "G").toUpperCase();
 
   const versionKey =
     dbUser?.updatedAt ||
     currentUser?.metadata?.lastSignInTime ||
     "" + avatarVersion;
+
+  const isGuest = !currentUser;
 
   return (
     <>
@@ -259,29 +261,43 @@ export default function StudentWelcome({ student, onOpenAuth }) {
           />
 
           <div className="flex-1">
-            <p className="text-xs text-gray-600 dark:text-gray-300">
-              {currentUser ? "Welcome back" : "Guest Mode"}
-            </p>
+            {isGuest ? (
+              <>
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Login now to unlock full ICT power
+                </p>
 
-            <h2 className="text-lg font-semibold">{displayName}</h2>
+                <h2 className="text-lg font-semibold">
+                  Track progress, access premium notes, take exams
+                </h2>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-gray-600 dark:text-gray-300">
+                  Welcome back
+                </p>
 
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {currentUser ? student?.grade : ""}
-              {currentUser && dbUser ? (
-                <>
-                  {student?.grade ? " • " : ""}
-                  {dbUser?.Board && dbUser.Board !== "none"
-                    ? dbUser.Board
-                    : "Board: —"}
-                  {" • "}
-                  {dbUser?.ExamYEar ? dbUser.ExamYEar : "Year: —"}
-                  {" • "}
-                  {dbUser?.phone && dbUser.phone !== "none"
-                    ? dbUser.phone
-                    : "Phone: —"}
-                </>
-              ) : null}
-            </p>
+                <h2 className="text-lg font-semibold">{displayName}</h2>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {student?.grade || ""}
+                  {dbUser ? (
+                    <>
+                      {student?.grade ? " • " : ""}
+                      {dbUser?.Board && dbUser.Board !== "none"
+                        ? dbUser.Board
+                        : "Board: —"}
+                      {" • "}
+                      {dbUser?.ExamYEar ? dbUser.ExamYEar : "Year: —"}
+                      {" • "}
+                      {dbUser?.phone && dbUser.phone !== "none"
+                        ? dbUser.phone
+                        : "Phone: —"}
+                    </>
+                  ) : null}
+                </p>
+              </>
+            )}
           </div>
 
           <button
@@ -291,7 +307,7 @@ export default function StudentWelcome({ student, onOpenAuth }) {
               else onOpenAuth?.();
             }}
           >
-            {currentUser ? "Profile" : "Login"}
+            {currentUser ? "Profile" : "Login now"}
           </button>
         </div>
       </motion.section>

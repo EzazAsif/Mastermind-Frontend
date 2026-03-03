@@ -227,7 +227,7 @@ export default function Notes({ openPdf, currentUser, locale }) {
               >
                 <div className="flex items-start justify-between">
                   <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
-                    📄
+                    📓
                   </div>
 
                   {/* Free/Premium label */}

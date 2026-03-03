@@ -724,11 +724,15 @@ export default function Student({ onOpenAuth, setRoute }) {
         transition={{ duration: 0.4 }}
         className="rounded-xl2 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-soft overflow-hidden"
       >
-        <img
-          src="/ictbanner.jpg"
-          alt="ICT Mastermind Banner"
-          className="w-full h-48 sm:h-64 object-cover"
-        />
+        {/* Banner (show full image) */}
+        <div className="w-full bg-gray-100 dark:bg-gray-800">
+          <img
+            src="/ictbanner.jpg"
+            alt="ICT Mastermind Banner"
+            className="w-full h-40 sm:h-52 object-contain"
+            loading="lazy"
+          />
+        </div>
 
         <div className="p-6 space-y-4">
           <div className="text-center space-y-3">
@@ -762,29 +766,56 @@ export default function Student({ onOpenAuth, setRoute }) {
             )}
           </div>
 
+          {/* Bottom center: icons + copyright */}
           <div className="pt-6 border-t border-gray-200 dark:border-gray-800">
-            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-              <div className="flex gap-6 text-base font-medium">
+            <div className="flex flex-col items-center justify-center gap-3">
+              <div className="flex items-center justify-center gap-4">
                 <a
                   href="https://facebook.com/ictmastermindbd"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-gray-700 dark:text-gray-300 hover:text-[var(--mm-teal)] transition"
+                  aria-label="Facebook"
+                  title="Facebook"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:text-[var(--mm-teal)] hover:border-[var(--mm-teal)] transition"
                 >
-                  🔵 Facebook Page
+                  {/* Facebook icon */}
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d="M22 12.07C22 6.49 17.52 2 11.93 2 6.35 2 1.86 6.49 1.86 12.07c0 5.04 3.65 9.22 8.44 10.02v-7.1H7.74v-2.92h2.56V9.85c0-2.53 1.5-3.93 3.8-3.93 1.1 0 2.25.2 2.25.2v2.48h-1.27c-1.25 0-1.64.78-1.64 1.57v1.88h2.8l-.45 2.92h-2.35v7.1c4.79-.8 8.44-4.98 8.44-10.02Z" />
+                  </svg>
                 </a>
 
                 <a
                   href="https://ictmastermind.com"
                   target="_blank"
                   rel="noreferrer"
-                  className="text-gray-700 dark:text-gray-300 hover:text-[var(--mm-teal)] transition"
+                  aria-label="Website"
+                  title="Website"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:text-[var(--mm-teal)] hover:border-[var(--mm-teal)] transition"
                 >
-                  🌐 Website
+                  {/* Globe icon */}
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M2 12h20" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z" />
+                  </svg>
                 </a>
               </div>
 
-              <span className="text-xs text-gray-500 dark:text-gray-400">
+              <span className="text-xs text-gray-500 dark:text-gray-400 text-center">
                 © 2026 ICT Mastermind. All Rights Reserved
               </span>
             </div>
