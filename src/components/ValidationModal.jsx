@@ -33,6 +33,7 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
 
       onSuccess(); // refresh header state
       onClose();
+      window.location.assign("https://academia.ictmastermind.com");
     } catch (err) {
       console.error(err);
       alert("Failed to submit request");
