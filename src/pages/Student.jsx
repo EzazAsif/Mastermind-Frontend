@@ -782,7 +782,7 @@ export default function Student({ onOpenAuth, setRoute }) {
             <img
               src="/ictbanner.jpg"
               alt="ICT Mastermind Banner"
-              className="max-h-28 sm:max-h-36 object-contain"
+              className="max-h-56 sm:max-h-72 object-contain"
               loading="lazy"
             />
           </div>
@@ -861,8 +861,8 @@ export default function Student({ onOpenAuth, setRoute }) {
               </a>
             </div>
 
-            {/* Full Width Dark Divider */}
-            <div className="w-full h-[2px] bg-black dark:bg-gray-700"></div>
+            {/* Blurred Divider */}
+            <div className="w-full h-[2px] bg-black/40 dark:bg-gray-600/40 blur-[0.6px]"></div>
 
             {/* Copyright */}
             <span className="text-xs text-gray-600 dark:text-gray-400 text-center">
