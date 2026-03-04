@@ -1,6 +1,6 @@
 export const TABS = [
   { id: "student", label: "Home", icon: "🎓" },
-  { id: "Notes", label: "My Notes", icon: "📚" },
+  { id: "Notes", label: "My PDFs", icon: "📚" },
   { id: "takeExam", label: "Take Exam", icon: "📝" },
   //{ id: "home", label: "Home", icon: "🏠" },
   { id: "analytics", label: "Analytics", icon: "📈" },
