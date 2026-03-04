@@ -77,12 +77,264 @@ function isUserValidated(serverUser) {
   return raw === true || raw === 1 || raw === "true";
 }
 
+/* ===========================================
+   Beautiful Modals
+=========================================== */
+function ModalShell({
+  open,
+  onClose,
+  title,
+  subtitle,
+  icon,
+  children,
+  actions,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      {/* backdrop */}
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
+        aria-label="Close modal"
+        onClick={onClose}
+      />
+
+      {/* modal card */}
+      <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-gray-950 border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden">
+        <div className="h-1.5 w-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+
+        <div className="p-6">
+          <div className="flex items-start gap-4">
+            <div className="shrink-0 h-11 w-11 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 flex items-center justify-center">
+              <span className="text-xl">{icon}</span>
+            </div>
+
+            <div className="min-w-0">
+              <h3 className="text-xl font-extrabold text-gray-900 dark:text-gray-50">
+                {title}
+              </h3>
+              {subtitle && (
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 leading-relaxed">
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5">{children}</div>
+
+          <div className="mt-6 flex justify-end gap-2">{actions}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatPill({ label, value, tone = "info" }) {
+  const toneCls =
+    tone === "good"
+      ? "bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900 text-green-700 dark:text-green-300"
+      : tone === "bad"
+        ? "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900 text-red-700 dark:text-red-300"
+        : tone === "muted"
+          ? "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-200"
+          : "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900 text-blue-700 dark:text-blue-200";
+
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 px-4 py-3 rounded-2xl border ${toneCls}`}
+    >
+      <span className="text-sm font-semibold">{label}</span>
+      <span className="text-sm font-extrabold">{value}</span>
+    </div>
+  );
+}
+
+function IntroModal({ open, totalQuestions, minutes, onOk }) {
+  return (
+    <ModalShell
+      open={open}
+      onClose={onOk}
+      title="Ready to start?"
+      subtitle={`There will be ${totalQuestions} questions and ${minutes} minutes to take the exam. Good luck!`}
+      icon="📝"
+      actions={
+        <button
+          type="button"
+          onClick={onOk}
+          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+        >
+          OK, start exam
+        </button>
+      }
+    >
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-4">
+        <p className="text-gray-700 dark:text-gray-200 leading-relaxed">
+          Tip: Don’t refresh the page during the exam.
+        </p>
+      </div>
+    </ModalShell>
+  );
+}
+
+function ResultModal({
+  open,
+  correct,
+  wrong,
+  unanswered,
+  total,
+  percentage,
+  onClose,
+}) {
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      title="Exam summary"
+      subtitle="Close this to see the full review with correct answers highlighted."
+      icon="✅"
+      actions={
+        <button
+          type="button"
+          onClick={onClose}
+          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+        >
+          Close & review
+        </button>
+      }
+    >
+      <div className="space-y-3">
+        <StatPill label="Score" value={`${correct} / ${total}`} tone="info" />
+        <StatPill label="Percentage" value={`${percentage}%`} tone="info" />
+
+        <div className="grid grid-cols-3 gap-3 pt-1">
+          <div className="rounded-2xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 p-3">
+            <div className="text-xs font-semibold text-green-700 dark:text-green-300">
+              Correct
+            </div>
+            <div className="mt-1 text-lg font-extrabold text-green-800 dark:text-green-200">
+              {correct}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3">
+            <div className="text-xs font-semibold text-red-700 dark:text-red-300">
+              Wrong
+            </div>
+            <div className="mt-1 text-lg font-extrabold text-red-800 dark:text-red-200">
+              {wrong}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 p-3">
+            <div className="text-xs font-semibold text-gray-700 dark:text-gray-200">
+              Unanswered
+            </div>
+            <div className="mt-1 text-lg font-extrabold text-gray-900 dark:text-gray-50">
+              {unanswered}
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ===========================================
+   Option row (review colors)
+=========================================== */
+function OptionRow({
+  label,
+  isSelected,
+  isCorrectOption,
+  isWrongSelected,
+  disabled,
+  onSelect,
+  showReviewColors,
+}) {
+  const ring =
+    showReviewColors && isCorrectOption
+      ? "ring-2 ring-green-500"
+      : showReviewColors && isWrongSelected
+        ? "ring-2 ring-red-500"
+        : "ring-1 ring-gray-300 dark:ring-gray-700";
+
+  const dot =
+    showReviewColors && isCorrectOption
+      ? "bg-green-500"
+      : showReviewColors && isWrongSelected
+        ? "bg-red-500"
+        : isSelected
+          ? "bg-gray-700 dark:bg-gray-200"
+          : "bg-transparent";
+
+  const textColor =
+    showReviewColors && isCorrectOption
+      ? "text-green-700 dark:text-green-300"
+      : showReviewColors && isWrongSelected
+        ? "text-red-700 dark:text-red-300"
+        : "text-gray-800 dark:text-gray-100";
+
+  return (
+    <label
+      className={`relative flex items-start gap-3 p-2 rounded-xl ${
+        disabled
+          ? "cursor-not-allowed opacity-95"
+          : "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900"
+      }`}
+      // ✅ stops browser from focusing the hidden radio and jumping scroll
+      onMouseDown={(e) => e.preventDefault()}
+      // ✅ we control selection ourselves
+      onClick={() => {
+        if (!disabled) onSelect();
+      }}
+    >
+      <span
+        className={`mt-1 h-5 w-5 rounded-full flex items-center justify-center ${ring}`}
+        aria-hidden="true"
+      >
+        <span className={`h-3 w-3 rounded-full ${dot}`} />
+      </span>
+
+      {/* Keep input for accessibility, but don't let it drive scroll */}
+      <input
+        type="radio"
+        className="absolute opacity-0 pointer-events-none"
+        disabled={disabled}
+        checked={isSelected}
+        readOnly
+        tabIndex={-1}
+      />
+
+      <span className={`leading-6 ${textColor}`}>{label}</span>
+    </label>
+  );
+}
+
 export default function TakeExam() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(900);
+
+  const [examStarted, setExamStarted] = useState(false);
+  const [introOpen, setIntroOpen] = useState(false);
+
   const [submitted, setSubmitted] = useState(false);
-  const [score, setScore] = useState(null);
+
+  const [correctCount, setCorrectCount] = useState(null);
+  const [percentage, setPercentage] = useState(null);
+
+  const [resultOpen, setResultOpen] = useState(false);
+  const [summary, setSummary] = useState({
+    correct: 0,
+    wrong: 0,
+    unanswered: 0,
+    total: 0,
+  });
+
+  const [reviewMode, setReviewMode] = useState(false);
 
   const [authReady, setAuthReady] = useState(false);
   const [uid, setUid] = useState(null);
@@ -97,6 +349,15 @@ export default function TakeExam() {
 
   const API_ORIGIN = "https://ugliest-hannie-ezaz-307892de.koyeb.app";
   const EXAM_TAKEN_KEY = "exam_taken";
+
+  // OPTIONAL: helpful if some page set body overflow hidden; restores normal scrolling
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    if (prev === "hidden") document.body.style.overflow = "";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
 
   // ---- Auth: optional (exam can run without login) ----
   useEffect(() => {
@@ -145,29 +406,18 @@ export default function TakeExam() {
   // ---- Derived rules ----
   const examTaken = useMemo(() => readExamTaken(EXAM_TAKEN_KEY), [submitted]);
 
-  // We only *know* validation status after fetch finishes when logged in.
-  // If not logged in, it's immediately known (not validated).
   const validatedReady = useMemo(() => {
     if (!uid) return true;
     return !userLoading;
   }, [uid, userLoading]);
 
   const validated = useMemo(() => {
-    if (!uid) return false; // not logged in -> cannot be validated
-    if (!validatedReady) return false; // unknown yet
+    if (!uid) return false;
+    if (!validatedReady) return false;
     return isUserValidated(serverUser);
   }, [uid, validatedReady, serverUser]);
 
-  // ✅ Allow exam if:
-  // - validated user (always)
-  // - OR flag not taken yet (everyone once)
-  // - OR just submitted in this session (so they can see score/result)
   const canTakeExam = validated || !examTaken || submitted;
-
-  // ✅ Block only if:
-  // - flag taken AND NOT validated
-  // - AND NOT currently showing result
-  // - AND validation status is READY (prevents instant popup while loading)
   const shouldBlock = examTaken && !validated && !submitted && validatedReady;
 
   // ---- Modal behavior when blocked ----
@@ -178,56 +428,17 @@ export default function TakeExam() {
       return;
     }
 
-    // blocked + NOT logged in -> show login modal
     if (!uid) {
       setLoginOpen(true);
       setShowValidationModal(false);
       return;
     }
 
-    // blocked + logged in -> wait until user fetch completes
     if (!validatedReady) return;
 
     setShowValidationModal(true);
     setLoginOpen(false);
   }, [shouldBlock, uid, validatedReady]);
-
-  // Modal open failure log (only when it SHOULD open)
-  useEffect(() => {
-    if (!shouldBlock) return;
-
-    if (!uid && !loginOpen) {
-      console.log("[MODAL OPEN FAIL] expected AuthModal", {
-        examTaken,
-        validated,
-        uid,
-        serverUser,
-        userLoading,
-        localStorage: localStorage.getItem(EXAM_TAKEN_KEY),
-      });
-    }
-
-    if (uid && validatedReady && !showValidationModal) {
-      console.log("[MODAL OPEN FAIL] expected ValidationModal", {
-        examTaken,
-        validated,
-        uid,
-        serverUser,
-        userLoading,
-        localStorage: localStorage.getItem(EXAM_TAKEN_KEY),
-      });
-    }
-  }, [
-    shouldBlock,
-    uid,
-    validatedReady,
-    showValidationModal,
-    loginOpen,
-    examTaken,
-    validated,
-    serverUser,
-    userLoading,
-  ]);
 
   // ---- Fetch questions if allowed (no need for login) ----
   useEffect(() => {
@@ -246,7 +457,21 @@ export default function TakeExam() {
           _id: stableIdFromQuestion(q),
         }));
 
-        if (!cancelled) setQuestions(list);
+        if (!cancelled) {
+          setQuestions(list);
+
+          // reset exam session state when new questions load
+          setAnswers({});
+          setSubmitted(false);
+          setCorrectCount(null);
+          setPercentage(null);
+          setSummary({ correct: 0, wrong: 0, unanswered: 0, total: 0 });
+          setResultOpen(false);
+          setReviewMode(false);
+          setExamStarted(false);
+          setIntroOpen(false);
+          setTimeLeft(900);
+        }
       } catch {
         if (!cancelled) alert("Failed to load exam");
       }
@@ -258,10 +483,20 @@ export default function TakeExam() {
     };
   }, [API_ORIGIN, canTakeExam]);
 
-  // ---- Timer ----
+  // ---- Show intro popup BEFORE starting (only once per load) ----
+  useEffect(() => {
+    if (!questions.length) return;
+    if (submitted) return;
+    if (!canTakeExam) return;
+
+    if (!examStarted) setIntroOpen(true);
+  }, [questions.length, submitted, canTakeExam, examStarted]);
+
+  // ---- Timer starts ONLY after intro OK ----
   useEffect(() => {
     if (!questions.length || submitted) return;
     if (!canTakeExam) return;
+    if (!examStarted) return;
 
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -276,35 +511,58 @@ export default function TakeExam() {
 
     return () => clearInterval(timerRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questions, submitted, canTakeExam]);
+  }, [questions, submitted, canTakeExam, examStarted]);
 
   const handleChange = (qId, optIndex) => {
+    if (!examStarted) return;
+    if (submitted) return;
     setAnswers((prev) => ({ ...prev, [qId]: Number(optIndex) }));
   };
 
-  // ---- Submit: set flag always; update score only if logged in ----
+  const computeSummary = () => {
+    let correct = 0;
+    let wrong = 0;
+    let unanswered = 0;
+
+    questions.forEach((q) => {
+      const ans = answers[q._id];
+      if (ans === undefined) {
+        unanswered++;
+        return;
+      }
+      if (ans === q.correctAnswer) correct++;
+      else wrong++;
+    });
+
+    return {
+      correct,
+      wrong,
+      unanswered,
+      total: questions.length,
+    };
+  };
+
   const handleSubmit = async () => {
     if (submitted) return;
 
-    // set the "taken" flag immediately
+    clearInterval(timerRef.current);
+
     writeExamTaken(EXAM_TAKEN_KEY);
 
-    let correct = 0;
-    questions.forEach((q) => {
-      const ans = answers[q._id];
-      if (ans !== undefined && ans === q.correctAnswer) correct++;
-    });
+    const s = computeSummary();
+    const pct = Number(((s.correct / s.total) * 100).toFixed(2));
 
-    const percentage = Number(((correct / questions.length) * 100).toFixed(2));
-    setScore(percentage);
+    setCorrectCount(s.correct);
+    setPercentage(pct);
+    setSummary(s);
     setSubmitted(true);
+    setResultOpen(true);
 
-    // Only update score if logged in
     if (!uid) return;
 
     try {
       await axios.put(`${API_ORIGIN}/api/users/${uid}/score`, {
-        score: percentage,
+        score: pct,
       });
     } catch {}
   };
@@ -331,12 +589,11 @@ export default function TakeExam() {
 
         <div className="p-6 max-w-3xl mx-auto">
           <h2 className="text-2xl font-bold mb-2">Exam Locked</h2>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-300">
             You already took the exam once. Subscribe (validate) to take
             unlimited exams.
           </p>
 
-          {/* optional: show loading state if logged in and checking */}
           {uid && !validatedReady && (
             <p className="mt-3 text-sm text-gray-500">Checking your account…</p>
           )}
@@ -347,69 +604,137 @@ export default function TakeExam() {
 
   if (!questions.length) return <p className="p-6">Loading exam...</p>;
 
-  const minutes = String(Math.floor(timeLeft / 60)).padStart(2, "0");
-  const seconds = String(timeLeft % 60).padStart(2, "0");
+  const mm = String(Math.floor(timeLeft / 60)).padStart(2, "0");
+  const ss = String(timeLeft % 60).padStart(2, "0");
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    // ✅ normal page wrapper (no internal scrolling)
+    <div className="p-6 pb-24 max-w-3xl mx-auto">
+      <IntroModal
+        open={introOpen && !submitted}
+        totalQuestions={questions.length}
+        minutes={15}
+        onOk={() => {
+          setIntroOpen(false);
+          setExamStarted(true);
+        }}
+      />
+
+      <ResultModal
+        open={resultOpen}
+        correct={summary.correct}
+        wrong={summary.wrong}
+        unanswered={summary.unanswered}
+        total={summary.total}
+        percentage={percentage ?? 0}
+        onClose={() => {
+          setResultOpen(false);
+          setReviewMode(true);
+        }}
+      />
+
       <h2 className="text-2xl font-bold mb-4">Take Exam</h2>
 
       {!submitted && (
-        <p className="mb-4 text-red-600 font-semibold">
-          Time Left: {minutes}:{seconds}
-        </p>
+        <div className="mb-4 rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-3">
+          <p className="text-red-700 dark:text-red-200 font-semibold">
+            Time Left: {mm}:{ss}
+          </p>
+        </div>
+      )}
+
+      {submitted && (
+        <div className="mb-4 rounded-2xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 p-4">
+          <h3 className="text-xl font-extrabold mb-1 text-gray-900 dark:text-gray-50">
+            Result
+          </h3>
+          <p className="text-gray-800 dark:text-gray-100">
+            Score: <b>{correctCount}</b> / <b>{questions.length}</b>
+          </p>
+          <p className="text-gray-800 dark:text-gray-100">
+            Percentage: <b>{percentage}%</b>
+          </p>
+        </div>
       )}
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          clearInterval(timerRef.current);
           handleSubmit();
         }}
       >
-        {questions.map((q, idx) => (
-          <div key={q._id} className="mb-6 border p-4 rounded-lg">
-            <div
-              className="font-medium mb-2"
-              style={{ whiteSpace: "pre-line" }}
-            >
-              {`Q${idx + 1}. ${q.text || ""}`}
-            </div>
+        {questions.map((q, idx) => {
+          const userAns = answers[q._id];
+          const userAnswered = userAns !== undefined;
+          const userCorrect = userAnswered && userAns === q.correctAnswer;
 
-            {q.options.map((opt, i) => (
-              <label key={i} className="block mb-1 cursor-pointer">
-                <input
-                  type="radio"
-                  name={q._id}
-                  value={i}
-                  disabled={submitted}
-                  checked={answers[q._id] === i}
-                  onChange={() => handleChange(q._id, i)}
-                  className="mr-2"
-                />
-                {opt}
-              </label>
-            ))}
-          </div>
-        ))}
+          return (
+            <div
+              key={q._id}
+              className="mb-6 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4 shadow-sm"
+            >
+              <div
+                className="font-semibold mb-3 text-gray-900 dark:text-gray-50"
+                style={{ whiteSpace: "pre-line" }}
+              >
+                {`Q${idx + 1}. ${q.text || ""}`}
+              </div>
+
+              <div className="space-y-1">
+                {q.options.map((opt, i) => {
+                  const isSelected = userAns === i;
+                  const isCorrectOption = i === q.correctAnswer;
+
+                  const isWrongSelected =
+                    submitted && isSelected && !isCorrectOption;
+
+                  const showReviewColors = submitted && reviewMode;
+
+                  const disabled = !examStarted || submitted;
+
+                  return (
+                    <OptionRow
+                      key={i}
+                      label={opt}
+                      isSelected={isSelected}
+                      isCorrectOption={showReviewColors && isCorrectOption}
+                      isWrongSelected={showReviewColors && isWrongSelected}
+                      disabled={disabled}
+                      showReviewColors={showReviewColors}
+                      onSelect={() => handleChange(q._id, i)}
+                    />
+                  );
+                })}
+              </div>
+
+              {submitted && reviewMode && (
+                <div className="mt-3 text-sm">
+                  {!userAnswered ? (
+                    <span className="text-gray-500">Unanswered</span>
+                  ) : userCorrect ? (
+                    <span className="text-green-600 font-semibold">
+                      Correct
+                    </span>
+                  ) : (
+                    <span className="text-red-600 font-semibold">Wrong</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {!submitted && (
           <button
             type="submit"
-            className="bg-blue-600 text-white px-4 py-2 rounded"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm"
+            disabled={!examStarted}
+            title={!examStarted ? "Click OK on the popup to start" : undefined}
           >
             Submit Exam
           </button>
         )}
       </form>
-
-      {submitted && (
-        <div className="mt-6 p-4 border rounded bg-green-50">
-          <h3 className="text-xl font-bold mb-2">Exam Result</h3>
-          <p>Score: {score} / 100</p>
-          <p>Percentage: {score}%</p>
-        </div>
-      )}
     </div>
   );
 }
