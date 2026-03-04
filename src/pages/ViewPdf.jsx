@@ -1,13 +1,10 @@
-// ViewPdf.jsx (FULL SCREEN + PINCH ZOOM + PAN + SWIPE PAGE)
-// + Go To Page inside bottom black bar
-// + Desktop keyboard zoom: + / - / 0
-// + Responsive fit:
-//    - Desktop: prefer FULL HEIGHT (show full page)
-//    - Android: prefer FULL WIDTH
-//    - Uses PDF aspect ratio to auto-switch if preferred fit would crop
-// + Maintain quality on zoom:
-//    - Keep zoom/pan via react-zoom-pan-pinch (no blur-causing CSS upscale fix needed)
-//    - Increase react-pdf canvas resolution with devicePixelRatio based on current zoom
+// ViewPdf.jsx (CONTINUOUS VERTICAL SCROLL + PINCH ZOOM + PAN + GO TO PAGE)
+// - Renders ALL pages (vertical scroll)
+// - Mobile: prefer FULL WIDTH
+// - Desktop: prefer FULL HEIGHT (each page fits viewport height) but auto-switch if it would crop
+// - Keeps zoom/pan via react-zoom-pan-pinch
+// - Boosts react-pdf canvas resolution using devicePixelRatio based on current zoom
+// - Removes left/right swipe + buttons; keeps page navigation via Go To (scroll to page)
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -25,16 +22,17 @@ export default function ViewPdf({ fileName, onBack }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadError, setLoadError] = useState(null);
 
-  // content area between bars
+  // Scrollable content area between bars
+  const scrollRef = useRef(null);
+
+  // Measure viewport between bars (for responsive sizing)
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 1, h: 1 });
 
   const [isZoomed, setIsZoomed] = useState(false);
-
-  // Track current zoom scale (from TransformWrapper) to boost PDF render quality
   const [zoomScale, setZoomScale] = useState(1);
 
-  // PDF page natural size (for aspect ratio)
+  // PDF page natural size (aspect ratio) - we grab from first page
   const [pageDims, setPageDims] = useState({ w: null, h: null });
 
   // Detect Android
@@ -64,15 +62,24 @@ export default function ViewPdf({ fileName, onBack }) {
     requestAnimationFrame(() => gotoInputRef.current?.focus());
   }, [currentPage]);
 
-  const closeGoto = useCallback(() => {
-    setIsGotoOpen(false);
+  const closeGoto = useCallback(() => setIsGotoOpen(false), []);
+
+  // page wrapper refs for scroll-to + intersection tracking
+  const pageWrapRefs = useRef([]);
+
+  const scrollToPage = useCallback((p) => {
+    const node = pageWrapRefs.current?.[p - 1];
+    if (node && typeof node.scrollIntoView === "function") {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }, []);
 
   const applyGoto = useCallback(() => {
     const target = clampPage(gotoValue);
     setCurrentPage(target);
     setIsGotoOpen(false);
-  }, [clampPage, gotoValue]);
+    requestAnimationFrame(() => scrollToPage(target));
+  }, [clampPage, gotoValue, scrollToPage]);
 
   // ---------- Lock Body Scroll ----------
   useEffect(() => {
@@ -126,121 +133,16 @@ export default function ViewPdf({ fileName, onBack }) {
     setNumPages(n);
     setLoadError(null);
     setCurrentPage((p) => Math.max(1, Math.min(n || 1, p || 1)));
+    pageWrapRefs.current = new Array(n).fill(null);
   };
 
   const onDocumentLoadError = (err) => {
     setLoadError(err?.message || "Failed to load PDF");
   };
 
-  const canPrev = currentPage > 1;
-  const canNext = numPages ? currentPage < numPages : false;
-
-  const prevPage = useCallback(() => {
-    setCurrentPage((p) => Math.max(1, p - 1));
-  }, []);
-
-  const nextPage = useCallback(() => {
-    setCurrentPage((p) => Math.min(numPages || 1, p + 1));
-  }, [numPages]);
-
-  // Reset zoom when page changes
-  const zoomApiRef = useRef(null);
-  useEffect(() => {
-    zoomApiRef.current?.resetTransform?.();
-    setIsZoomed(false);
-    setZoomScale(1);
-  }, [currentPage]);
-
-  // ---------- Keyboard (+ / - / 0) ----------
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") {
-        if (isGotoOpen) closeGoto();
-        else onBack?.();
-        return;
-      }
-
-      if (!isGotoOpen) {
-        // Page navigation
-        if (e.key === "ArrowLeft") prevPage();
-        if (e.key === "ArrowRight") nextPage();
-
-        // Zoom controls (use TransformWrapper API)
-        if (e.key === "+" || e.key === "=") {
-          e.preventDefault();
-          zoomApiRef.current?.zoomIn?.(0.25);
-        }
-        if (e.key === "-" || e.key === "_") {
-          e.preventDefault();
-          zoomApiRef.current?.zoomOut?.(0.25);
-        }
-        if (e.key === "0") {
-          e.preventDefault();
-          zoomApiRef.current?.resetTransform?.();
-          setIsZoomed(false);
-          setZoomScale(1);
-        }
-      }
-
-      if (isGotoOpen && e.key === "Enter") applyGoto();
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onBack, prevPage, nextPage, isGotoOpen, closeGoto, applyGoto]);
-
-  // ---------- Swipe (Only when not zoomed & not overlay) ----------
-  const swipeRef = useRef({
-    active: false,
-    startX: 0,
-    startY: 0,
-    lastX: 0,
-    lastY: 0,
-  });
-
-  const onPointerDown = useCallback(
-    (e) => {
-      if (isZoomed || isGotoOpen) return;
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-
-      swipeRef.current.active = true;
-      swipeRef.current.startX = e.clientX;
-      swipeRef.current.startY = e.clientY;
-      swipeRef.current.lastX = e.clientX;
-      swipeRef.current.lastY = e.clientY;
-    },
-    [isZoomed, isGotoOpen],
-  );
-
-  const onPointerMove = useCallback(
-    (e) => {
-      if (isZoomed || isGotoOpen) return;
-      if (!swipeRef.current.active) return;
-
-      swipeRef.current.lastX = e.clientX;
-      swipeRef.current.lastY = e.clientY;
-    },
-    [isZoomed, isGotoOpen],
-  );
-
-  const onPointerUp = useCallback(() => {
-    if (isZoomed || isGotoOpen) return;
-    if (!swipeRef.current.active) return;
-
-    swipeRef.current.active = false;
-
-    const dx = swipeRef.current.lastX - swipeRef.current.startX;
-    const dy = swipeRef.current.lastY - swipeRef.current.startY;
-
-    if (Math.abs(dx) >= 60 && Math.abs(dy) <= 70) {
-      if (dx < 0 && canNext) nextPage();
-      if (dx > 0 && canPrev) prevPage();
-    }
-  }, [isZoomed, isGotoOpen, canNext, canPrev, nextPage, prevPage]);
-
   const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
 
-  // ---------- Best-fit sizing (with platform preference + PDF AR) ----------
+  // ---------- Best-fit sizing (platform preference + PDF AR) ----------
   const pageAR = useMemo(() => {
     const w = pageDims.w;
     const h = pageDims.h;
@@ -252,6 +154,7 @@ export default function ViewPdf({ fileName, onBack }) {
     const cw = Math.max(1, containerSize.w);
     const ch = Math.max(1, containerSize.h);
 
+    // If we don't know AR yet: mobile width, desktop height
     if (!pageAR) {
       return isAndroid
         ? { mode: "width", width: cw }
@@ -275,9 +178,109 @@ export default function ViewPdf({ fileName, onBack }) {
   const devicePixelRatio = useMemo(() => {
     const base =
       typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-    // Boost DPR as you zoom to keep it crisp, but cap for performance/memory
     return Math.max(1, Math.min(4, base * (zoomScale || 1) * 1.25));
   }, [zoomScale]);
+
+  // ---------- Zoom API ----------
+  const zoomApiRef = useRef(null);
+
+  // When zoomed, disable vertical scrolling to avoid fighting pan gestures
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.style.overflowY = isZoomed ? "hidden" : "auto";
+  }, [isZoomed]);
+
+  // ---------- Track current page while scrolling (IntersectionObserver) ----------
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || !numPages) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        // pick the most visible intersecting page
+        let best = null;
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          if (!best || e.intersectionRatio > best.intersectionRatio) best = e;
+        }
+        if (best?.target) {
+          const p = Number(best.target.getAttribute("data-page") || "1");
+          if (Number.isFinite(p) && p !== currentPage) setCurrentPage(p);
+        }
+      },
+      { root, threshold: [0.35, 0.5, 0.65, 0.8] },
+    );
+
+    pageWrapRefs.current.forEach((node) => node && obs.observe(node));
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numPages]);
+
+  // ---------- Keyboard (+ / - / 0) + navigation ----------
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        if (isGotoOpen) closeGoto();
+        else onBack?.();
+        return;
+      }
+
+      if (isGotoOpen && e.key === "Enter") {
+        applyGoto();
+        return;
+      }
+
+      // Zoom controls
+      if (!isGotoOpen) {
+        if (e.key === "+" || e.key === "=") {
+          e.preventDefault();
+          zoomApiRef.current?.zoomIn?.(0.25);
+        }
+        if (e.key === "-" || e.key === "_") {
+          e.preventDefault();
+          zoomApiRef.current?.zoomOut?.(0.25);
+        }
+        if (e.key === "0") {
+          e.preventDefault();
+          zoomApiRef.current?.resetTransform?.();
+          setIsZoomed(false);
+          setZoomScale(1);
+        }
+
+        // Page navigation (scroll-to)
+        if (e.key === "PageDown") {
+          e.preventDefault();
+          const next = Math.min(numPages || 1, currentPage + 1);
+          scrollToPage(next);
+        }
+        if (e.key === "PageUp") {
+          e.preventDefault();
+          const prev = Math.max(1, currentPage - 1);
+          scrollToPage(prev);
+        }
+        if (e.key === "Home") {
+          e.preventDefault();
+          scrollToPage(1);
+        }
+        if (e.key === "End") {
+          e.preventDefault();
+          scrollToPage(numPages || 1);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    onBack,
+    isGotoOpen,
+    closeGoto,
+    applyGoto,
+    currentPage,
+    numPages,
+    scrollToPage,
+  ]);
 
   if (!fileUrl) return null;
 
@@ -287,83 +290,101 @@ export default function ViewPdf({ fileName, onBack }) {
       animate={{ opacity: 1 }}
       className="fixed inset-0 z-[9999] bg-black"
       style={{ touchAction: "auto", overscrollBehavior: "none" }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
     >
-      {/* PDF (ONLY between bars) */}
+      {/* Scroll container (ONLY between bars) */}
       <div
         ref={containerRef}
-        className="absolute left-0 right-0 top-16 bottom-16 flex items-center justify-center"
+        className="absolute left-0 right-0 top-16 bottom-16"
       >
-        {loadError ? (
-          <div className="text-white/80 text-sm p-4">{loadError}</div>
-        ) : (
-          <Document
-            file={file}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={<div className="text-white/70">Loading PDF…</div>}
-          >
-            <TransformWrapper
-              minScale={1}
-              maxScale={4}
-              centerOnInit
-              onInit={(api) => (zoomApiRef.current = api)}
-              // keep swipe enabled only when not zoomed
-              onZoomStop={(api) => {
-                const s = api?.state?.scale || 1;
-                setZoomScale(s);
-                setIsZoomed(s > 1.01);
-              }}
-              onTransformed={(api) => {
-                const s = api?.state?.scale || 1;
-                // keep it smooth but responsive
-                setZoomScale(s);
-                setIsZoomed(s > 1.01);
-              }}
-              doubleClick={{ mode: "zoomIn" }}
-              wheel={{ disabled: true }}
+        <div
+          ref={scrollRef}
+          className="w-full h-full overflow-y-auto"
+          style={{
+            WebkitOverflowScrolling: "touch",
+            overscrollBehavior: "contain",
+          }}
+        >
+          {loadError ? (
+            <div className="text-white/80 text-sm p-4">{loadError}</div>
+          ) : (
+            <Document
+              file={file}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading={<div className="text-white/70 p-4">Loading PDF…</div>}
             >
-              <TransformComponent
-                wrapperStyle={{
-                  width: "100%",
-                  height: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  touchAction: "none",
+              <TransformWrapper
+                minScale={1}
+                maxScale={4}
+                centerOnInit
+                onInit={(api) => (zoomApiRef.current = api)}
+                onZoomStop={(api) => {
+                  const s = api?.state?.scale || 1;
+                  setZoomScale(s);
+                  setIsZoomed(s > 1.01);
                 }}
+                onTransformed={(api) => {
+                  const s = api?.state?.scale || 1;
+                  setZoomScale(s);
+                  setIsZoomed(s > 1.01);
+                }}
+                doubleClick={{ mode: "zoomIn" }}
+                wheel={{ disabled: true }}
               >
-                <Page
-                  pageNumber={currentPage}
-                  // Capture natural page size for aspect ratio
-                  onLoadSuccess={(page) => {
-                    try {
-                      const v = page?.view; // [xMin, yMin, xMax, yMax]
-                      if (Array.isArray(v) && v.length === 4) {
-                        const w = Math.abs(v[2] - v[0]);
-                        const h = Math.abs(v[3] - v[1]);
-                        if (w > 0 && h > 0) setPageDims({ w, h });
-                      }
-                    } catch {
-                      // ignore
-                    }
+                <TransformComponent
+                  wrapperStyle={{
+                    width: "100%",
+                    // allow natural height since we stack pages
+                    display: "flex",
+                    justifyContent: "center",
+                    touchAction: "none",
                   }}
-                  // Fit: Android prefer width, Desktop prefer height, auto-switch if needed
-                  {...(renderSize.mode === "width"
-                    ? { width: renderSize.width }
-                    : { height: renderSize.height })}
-                  // Quality boost (crisper when zooming)
-                  devicePixelRatio={devicePixelRatio}
-                  renderTextLayer={false}
-                  renderAnnotationLayer={true}
-                />
-              </TransformComponent>
-            </TransformWrapper>
-          </Document>
-        )}
+                  contentStyle={{
+                    width: "100%",
+                  }}
+                >
+                  <div className="w-full flex flex-col items-center gap-4 py-4">
+                    {Array.from(new Array(numPages || 0), (_, i) => {
+                      const pageNumber = i + 1;
+                      return (
+                        <div
+                          key={`pwrap-${pageNumber}`}
+                          data-page={pageNumber}
+                          ref={(el) => (pageWrapRefs.current[i] = el)}
+                          className="w-full flex items-center justify-center"
+                        >
+                          <Page
+                            pageNumber={pageNumber}
+                            onLoadSuccess={(page) => {
+                              // take AR from first loaded page
+                              if (pageNumber !== 1) return;
+                              try {
+                                const v = page?.view; // [xMin, yMin, xMax, yMax]
+                                if (Array.isArray(v) && v.length === 4) {
+                                  const w = Math.abs(v[2] - v[0]);
+                                  const h = Math.abs(v[3] - v[1]);
+                                  if (w > 0 && h > 0) setPageDims({ w, h });
+                                }
+                              } catch {
+                                // ignore
+                              }
+                            }}
+                            {...(renderSize.mode === "width"
+                              ? { width: renderSize.width }
+                              : { height: renderSize.height })}
+                            devicePixelRatio={devicePixelRatio}
+                            renderTextLayer={false}
+                            renderAnnotationLayer={true}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </TransformComponent>
+              </TransformWrapper>
+            </Document>
+          )}
+        </div>
       </div>
 
       {/* Top Bar */}
@@ -380,10 +401,10 @@ export default function ViewPdf({ fileName, onBack }) {
         <div />
       </div>
 
-      {/* Bottom Black Bar */}
+      {/* Bottom Black Bar (no left/right buttons) */}
       <div className="absolute bottom-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-4 bg-black/70">
         <div className="text-xs text-white/70">
-          {isZoomed ? "Pinch • Drag • Double tap" : "Swipe ← / →"} | Zoom: + / -
+          {isZoomed ? "Pinch • Drag • Double tap" : "Scroll"} | Zoom: + / - / 0
         </div>
 
         <button
@@ -393,22 +414,7 @@ export default function ViewPdf({ fileName, onBack }) {
           {currentPage} / {numPages ?? "—"}
         </button>
 
-        <div className="flex gap-2">
-          <button
-            onClick={prevPage}
-            disabled={!canPrev}
-            className="px-3 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40"
-          >
-            ◀
-          </button>
-          <button
-            onClick={nextPage}
-            disabled={!canNext}
-            className="px-3 py-2 rounded-xl bg-white/10 text-white disabled:opacity-40"
-          >
-            ▶
-          </button>
-        </div>
+        <div className="text-xs text-white/60">PgUp/PgDn • Home/End</div>
       </div>
 
       {/* Go To Overlay */}
