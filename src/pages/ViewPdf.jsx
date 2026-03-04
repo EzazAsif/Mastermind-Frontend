@@ -6,6 +6,11 @@
 // - ✅ Mobile scroll fix: when NOT zoomed, allow pan-y scrolling + disable panning capture
 // - Go To Page scrolls to that page
 // - No left/right buttons, no swipe logic
+//
+// ✅ Changes requested:
+// - Remove "PDF Viewer" heading
+// - Add TOP-RIGHT page "search bar" (number input) with a GO button on the side (Android-focused)
+// - Keep the bottom page number button EXACTLY where it was
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -83,6 +88,21 @@ export default function ViewPdf({ fileName, onBack }) {
     setIsGotoOpen(false);
     requestAnimationFrame(() => scrollToPage(target));
   }, [clampPage, gotoValue, scrollToPage]);
+
+  // ---------- TOP-RIGHT "Search bar" (number field + GO button) ----------
+  // Keep as string so user can clear temporarily.
+  const [headerPage, setHeaderPage] = useState("1");
+
+  useEffect(() => {
+    setHeaderPage(String(currentPage));
+  }, [currentPage]);
+
+  const applyHeaderGo = useCallback(() => {
+    const target = clampPage(headerPage);
+    setCurrentPage(target);
+    requestAnimationFrame(() => scrollToPage(target));
+    setHeaderPage(String(target));
+  }, [clampPage, headerPage, scrollToPage]);
 
   // ---------- Lock Body Scroll ----------
   useEffect(() => {
@@ -229,6 +249,16 @@ export default function ViewPdf({ fileName, onBack }) {
         return;
       }
 
+      // ✅ allow Enter in header input too
+      if (!isGotoOpen && e.key === "Enter") {
+        // if focus is on the header input, apply
+        const ae = document.activeElement;
+        if (ae && ae.getAttribute?.("data-page-search") === "1") {
+          applyHeaderGo();
+          return;
+        }
+      }
+
       if (!isGotoOpen) {
         // zoom
         if (e.key === "+" || e.key === "=") {
@@ -278,6 +308,7 @@ export default function ViewPdf({ fileName, onBack }) {
     currentPage,
     numPages,
     scrollToPage,
+    applyHeaderGo,
   ]);
 
   if (!fileUrl) return null;
@@ -398,9 +429,39 @@ export default function ViewPdf({ fileName, onBack }) {
           ← Back
         </button>
 
-        <div className="text-white text-sm">PDF Viewer</div>
+        {/* ✅ Removed "PDF Viewer" heading */}
 
-        <div />
+        {/* ✅ Top-right search bar (number field) + GO button on side */}
+        <div className="flex items-center gap-2">
+          <input
+            data-page-search="1"
+            type="number"
+            min={1}
+            max={numPages ?? undefined}
+            step={1}
+            value={headerPage}
+            onChange={(e) => {
+              const v = e.target.value;
+              // allow empty while editing
+              if (v === "") return setHeaderPage("");
+              // keep only valid-ish numeric text
+              setHeaderPage(v.replace(/[^\d]/g, ""));
+            }}
+            className="w-20 px-3 py-2 rounded-xl bg-white/10 text-white outline-none text-sm"
+            inputMode="numeric"
+          />
+
+          <button
+            onClick={applyHeaderGo}
+            className="px-3 py-2 rounded-xl bg-white/20 text-white text-sm"
+          >
+            Go
+          </button>
+
+          <div className="text-sm text-white/60 select-none">
+            / {numPages ?? "—"}
+          </div>
+        </div>
       </div>
 
       {/* Bottom Bar (no left/right buttons, keeps nav) */}
@@ -419,7 +480,7 @@ export default function ViewPdf({ fileName, onBack }) {
         <div className="text-xs text-white/60">PgUp/PgDn • Home/End</div>
       </div>
 
-      {/* Go To Overlay */}
+      {/* Go To Overlay (unchanged) */}
       {isGotoOpen && (
         <div
           className="absolute inset-0 z-[80] flex items-center justify-center bg-black/50"
