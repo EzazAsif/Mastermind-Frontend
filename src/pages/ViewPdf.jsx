@@ -1,10 +1,11 @@
-// ViewPdf.jsx (CONTINUOUS VERTICAL SCROLL + PINCH ZOOM + PAN + GO TO PAGE)
+// ViewPdf.jsx (CONTINUOUS VERTICAL SCROLL + MOBILE SCROLL FIX)
 // - Renders ALL pages (vertical scroll)
 // - Mobile: prefer FULL WIDTH
-// - Desktop: prefer FULL HEIGHT (each page fits viewport height) but auto-switch if it would crop
-// - Keeps zoom/pan via react-zoom-pan-pinch
-// - Boosts react-pdf canvas resolution using devicePixelRatio based on current zoom
-// - Removes left/right swipe + buttons; keeps page navigation via Go To (scroll to page)
+// - Desktop: prefer FULL HEIGHT per page (auto-switch if it would crop)
+// - Pinch zoom + pan (react-zoom-pan-pinch)
+// - ✅ Mobile scroll fix: when NOT zoomed, allow pan-y scrolling + disable panning capture
+// - Go To Page scrolls to that page
+// - No left/right buttons, no swipe logic
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
@@ -22,20 +23,22 @@ export default function ViewPdf({ fileName, onBack }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [loadError, setLoadError] = useState(null);
 
-  // Scrollable content area between bars
-  const scrollRef = useRef(null);
-
-  // Measure viewport between bars (for responsive sizing)
+  // content area between bars (viewport sizing)
   const containerRef = useRef(null);
   const [containerSize, setContainerSize] = useState({ w: 1, h: 1 });
 
+  // scrollable wrapper between bars
+  const scrollRef = useRef(null);
+
+  // zoom state
+  const zoomApiRef = useRef(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const [zoomScale, setZoomScale] = useState(1);
 
-  // PDF page natural size (aspect ratio) - we grab from first page
+  // page AR from first page
   const [pageDims, setPageDims] = useState({ w: null, h: null });
 
-  // Detect Android
+  // Detect Android (your original logic)
   const isAndroid = useMemo(() => {
     if (typeof navigator === "undefined") return false;
     return /Android/i.test(navigator.userAgent || "");
@@ -45,6 +48,9 @@ export default function ViewPdf({ fileName, onBack }) {
   const [isGotoOpen, setIsGotoOpen] = useState(false);
   const [gotoValue, setGotoValue] = useState("");
   const gotoInputRef = useRef(null);
+
+  // page wrappers for scroll-to + IO tracking
+  const pageWrapRefs = useRef([]);
 
   const clampPage = useCallback(
     (value) => {
@@ -56,6 +62,13 @@ export default function ViewPdf({ fileName, onBack }) {
     [numPages, currentPage],
   );
 
+  const scrollToPage = useCallback((p) => {
+    const node = pageWrapRefs.current?.[p - 1];
+    if (node && typeof node.scrollIntoView === "function") {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   const openGoto = useCallback(() => {
     setGotoValue(String(currentPage));
     setIsGotoOpen(true);
@@ -63,16 +76,6 @@ export default function ViewPdf({ fileName, onBack }) {
   }, [currentPage]);
 
   const closeGoto = useCallback(() => setIsGotoOpen(false), []);
-
-  // page wrapper refs for scroll-to + intersection tracking
-  const pageWrapRefs = useRef([]);
-
-  const scrollToPage = useCallback((p) => {
-    const node = pageWrapRefs.current?.[p - 1];
-    if (node && typeof node.scrollIntoView === "function") {
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, []);
 
   const applyGoto = useCallback(() => {
     const target = clampPage(gotoValue);
@@ -142,7 +145,7 @@ export default function ViewPdf({ fileName, onBack }) {
 
   const file = useMemo(() => (fileUrl ? { url: fileUrl } : null), [fileUrl]);
 
-  // ---------- Best-fit sizing (platform preference + PDF AR) ----------
+  // ---------- Best-fit sizing ----------
   const pageAR = useMemo(() => {
     const w = pageDims.w;
     const h = pageDims.h;
@@ -154,7 +157,6 @@ export default function ViewPdf({ fileName, onBack }) {
     const cw = Math.max(1, containerSize.w);
     const ch = Math.max(1, containerSize.h);
 
-    // If we don't know AR yet: mobile width, desktop height
     if (!pageAR) {
       return isAndroid
         ? { mode: "width", width: cw }
@@ -174,31 +176,27 @@ export default function ViewPdf({ fileName, onBack }) {
     }
   }, [containerSize, pageAR, isAndroid]);
 
-  // ---------- Quality: devicePixelRatio boosted by zoom ----------
+  // ---------- Quality ----------
   const devicePixelRatio = useMemo(() => {
     const base =
       typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
     return Math.max(1, Math.min(4, base * (zoomScale || 1) * 1.25));
   }, [zoomScale]);
 
-  // ---------- Zoom API ----------
-  const zoomApiRef = useRef(null);
-
-  // When zoomed, disable vertical scrolling to avoid fighting pan gestures
+  // ✅ When zoomed, prevent scroll container from fighting pan gestures
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.style.overflowY = isZoomed ? "hidden" : "auto";
   }, [isZoomed]);
 
-  // ---------- Track current page while scrolling (IntersectionObserver) ----------
+  // ---------- Track current page while scrolling ----------
   useEffect(() => {
     const root = scrollRef.current;
     if (!root || !numPages) return;
 
     const obs = new IntersectionObserver(
       (entries) => {
-        // pick the most visible intersecting page
         let best = null;
         for (const e of entries) {
           if (!e.isIntersecting) continue;
@@ -217,7 +215,7 @@ export default function ViewPdf({ fileName, onBack }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numPages]);
 
-  // ---------- Keyboard (+ / - / 0) + navigation ----------
+  // ---------- Keyboard ----------
   useEffect(() => {
     const onKeyDown = (e) => {
       if (e.key === "Escape") {
@@ -231,8 +229,8 @@ export default function ViewPdf({ fileName, onBack }) {
         return;
       }
 
-      // Zoom controls
       if (!isGotoOpen) {
+        // zoom
         if (e.key === "+" || e.key === "=") {
           e.preventDefault();
           zoomApiRef.current?.zoomIn?.(0.25);
@@ -248,7 +246,7 @@ export default function ViewPdf({ fileName, onBack }) {
           setZoomScale(1);
         }
 
-        // Page navigation (scroll-to)
+        // page navigation (scroll-to)
         if (e.key === "PageDown") {
           e.preventDefault();
           const next = Math.min(numPages || 1, currentPage + 1);
@@ -291,17 +289,20 @@ export default function ViewPdf({ fileName, onBack }) {
       className="fixed inset-0 z-[9999] bg-black"
       style={{ touchAction: "auto", overscrollBehavior: "none" }}
     >
-      {/* Scroll container (ONLY between bars) */}
+      {/* Content area between bars */}
       <div
         ref={containerRef}
         className="absolute left-0 right-0 top-16 bottom-16"
       >
+        {/* ✅ Scrollable list */}
         <div
           ref={scrollRef}
           className="w-full h-full overflow-y-auto"
           style={{
             WebkitOverflowScrolling: "touch",
             overscrollBehavior: "contain",
+            touchAction: "pan-y",
+            position: "relative",
           }}
         >
           {loadError ? (
@@ -328,20 +329,21 @@ export default function ViewPdf({ fileName, onBack }) {
                   setZoomScale(s);
                   setIsZoomed(s > 1.01);
                 }}
+                // ✅ KEY: don't capture drag when not zoomed => allow scroll
+                panning={{ disabled: !isZoomed }}
+                pinch={{ disabled: false }}
                 doubleClick={{ mode: "zoomIn" }}
                 wheel={{ disabled: true }}
               >
                 <TransformComponent
                   wrapperStyle={{
                     width: "100%",
-                    // allow natural height since we stack pages
                     display: "flex",
                     justifyContent: "center",
-                    touchAction: "none",
+                    // ✅ KEY: allow vertical finger scroll when not zoomed
+                    touchAction: isZoomed ? "none" : "pan-y",
                   }}
-                  contentStyle={{
-                    width: "100%",
-                  }}
+                  contentStyle={{ width: "100%" }}
                 >
                   <div className="w-full flex flex-col items-center gap-4 py-4">
                     {Array.from(new Array(numPages || 0), (_, i) => {
@@ -356,7 +358,7 @@ export default function ViewPdf({ fileName, onBack }) {
                           <Page
                             pageNumber={pageNumber}
                             onLoadSuccess={(page) => {
-                              // take AR from first loaded page
+                              // set AR from first page
                               if (pageNumber !== 1) return;
                               try {
                                 const v = page?.view; // [xMin, yMin, xMax, yMax]
@@ -401,7 +403,7 @@ export default function ViewPdf({ fileName, onBack }) {
         <div />
       </div>
 
-      {/* Bottom Black Bar (no left/right buttons) */}
+      {/* Bottom Bar (no left/right buttons, keeps nav) */}
       <div className="absolute bottom-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-4 bg-black/70">
         <div className="text-xs text-white/70">
           {isZoomed ? "Pinch • Drag • Double tap" : "Scroll"} | Zoom: + / - / 0
