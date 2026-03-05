@@ -681,55 +681,58 @@ export default function Student({ onOpenAuth, setRoute }) {
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") goToNotes();
         }}
-        className="rounded-xl2 p-[1px] bg-gradient-to-r from-teal-500 to-orange-500 cursor-pointer"
+        className="rounded-xl2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 shadow-soft cursor-pointer"
       >
-        <div className="rounded-xl2 bg-white dark:bg-gray-900 p-4 shadow-soft">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Available Chapters</h3>
-          </div>
-
-          <ul className="mt-3 space-y-2 text-sm">
-            {top5Notes.length > 0 ? (
-              top5Notes.map((n) => {
-                const isFree = Boolean(n?.isPublic);
-
-                return (
-                  <li
-                    key={
-                      n.id ||
-                      n._id ||
-                      `${n.originalName}-${n.storagePath || n.downloadURL || "x"}`
-                    }
-                    className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/40"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      goToNotes();
-                    }}
-                  >
-                    <span className="truncate">
-                      {n.noteName || n.originalName}
-                    </span>
-
-                    <span
-                      className={[
-                        "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-                        isFree
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
-                          : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-                      ].join(" ")}
-                    >
-                      {isFree ? "Free" : "Premium"}
-                    </span>
-                  </li>
-                );
-              })
-            ) : (
-              <li className="text-gray-500 dark:text-gray-400">
-                No notes found.
-              </li>
-            )}
-          </ul>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold">Available Chapters</h3>
         </div>
+
+        <ul className="mt-3 space-y-2 text-sm">
+          {top5Notes.length > 0 ? (
+            top5Notes.map((n) => {
+              const isFree = Boolean(n?.isPublic);
+
+              return (
+                <li
+                  key={
+                    n.id ||
+                    n._id ||
+                    `${n.originalName}-${n.storagePath || n.downloadURL || "x"}`
+                  }
+                  className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 dark:border-gray-800 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/40"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    goToNotes();
+                  }}
+                >
+                  <span className="truncate">
+                    {n.noteName || n.originalName}
+                  </span>
+
+                  <span
+                    className={[
+                      "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+                      isFree
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300"
+                        : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+                    ].join(" ")}
+                    title={
+                      isFree
+                        ? "This chapter is free"
+                        : "This chapter is premium"
+                    }
+                  >
+                    {isFree ? "Free" : "Premium"}
+                  </span>
+                </li>
+              );
+            })
+          ) : (
+            <li className="text-gray-500 dark:text-gray-400">
+              No notes found.
+            </li>
+          )}
+        </ul>
       </motion.section>
 
       {/* Latest Announcements */}
@@ -737,35 +740,32 @@ export default function Student({ onOpenAuth, setRoute }) {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
-        className="rounded-xl2 p-[1px] bg-gradient-to-r from-teal-500 to-orange-500"
+        className="rounded-xl2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 shadow-soft"
       >
-        <div className="rounded-xl2 bg-white dark:bg-gray-900 p-4 shadow-soft">
-          <h3 className="font-semibold">Announcements</h3>
-
-          <ul className="mt-3 space-y-2 text-sm">
-            {top5Announcements.length > 0 ? (
-              top5Announcements.map((a) => (
-                <li
-                  key={
-                    a.id ||
-                    a._id ||
-                    `${a.title}-${safeToDate(a.createdAt).getTime()}`
-                  }
-                  className="flex items-center justify-between"
-                >
-                  <span className="truncate mr-3">{a.title}</span>
-                  <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                    {safeToLocaleDateString(a.createdAt)}
-                  </span>
-                </li>
-              ))
-            ) : (
-              <li className="text-gray-500 dark:text-gray-400">
-                No announcements.
+        <h3 className="font-semibold">Announcements</h3>
+        <ul className="mt-3 space-y-2 text-sm">
+          {top5Announcements.length > 0 ? (
+            top5Announcements.map((a) => (
+              <li
+                key={
+                  a.id ||
+                  a._id ||
+                  `${a.title}-${safeToDate(a.createdAt).getTime()}`
+                }
+                className="flex items-center justify-between"
+              >
+                <span className="truncate mr-3">{a.title}</span>
+                <span className="text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  {safeToLocaleDateString(a.createdAt)}
+                </span>
               </li>
-            )}
-          </ul>
-        </div>
+            ))
+          ) : (
+            <li className="text-gray-500 dark:text-gray-400">
+              No announcements.
+            </li>
+          )}
+        </ul>
       </motion.section>
 
       {/* Branding Card */}
