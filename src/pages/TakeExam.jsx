@@ -104,7 +104,7 @@ function ModalShell({
 
       {/* modal card */}
       <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-gray-950 border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden">
-        <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 via-cyan-400 to-orange-500" />
+        <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 to-orange-500" />
         <div className="p-6">
           <div className="flex items-start gap-4">
             <div className="shrink-0 h-11 w-11 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 flex items-center justify-center">
