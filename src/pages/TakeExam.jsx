@@ -8,6 +8,7 @@ import AuthModal from "../components/AuthModal.jsx";
 /* ===========================================
    Stable Key Helpers (no randomness)
 =========================================== */
+const banglaOptions = ["ক", "খ", "গ", "ঘ"];
 function hashString(s) {
   let h1 = 0xdeadbeef,
     h2 = 0x41c6ce57;
@@ -243,10 +244,15 @@ function ResultModal({
 }
 
 /* ===========================================
-   Option row (review colors)
+   Option row
+   - Normal: selected => BLUE
+   - Review: correct option => GREEN (always)
+            wrong selected => RED
+   - No text inside radio
 =========================================== */
 function OptionRow({
   label,
+  letter,
   isSelected,
   isCorrectOption,
   isWrongSelected,
@@ -254,28 +260,59 @@ function OptionRow({
   onSelect,
   showReviewColors,
 }) {
-  const ring =
-    showReviewColors && isCorrectOption
-      ? "ring-2 ring-green-500"
-      : showReviewColors && isWrongSelected
-        ? "ring-2 ring-red-500"
-        : "ring-1 ring-gray-300 dark:ring-gray-700";
+  const base =
+    "mt-1 h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0";
 
-  const dot =
-    showReviewColors && isCorrectOption
-      ? "bg-green-500"
-      : showReviewColors && isWrongSelected
-        ? "bg-red-500"
-        : isSelected
-          ? "bg-gray-700 dark:bg-gray-200"
-          : "bg-transparent";
+  let ring = "ring-1 ring-gray-300 dark:ring-gray-700";
+  let bg = "bg-white dark:bg-gray-950";
+  let text = "text-gray-800 dark:text-gray-100";
+  let dotCls = "h-2.5 w-2.5 rounded-full bg-transparent";
 
-  const textColor =
-    showReviewColors && isCorrectOption
-      ? "text-green-700 dark:text-green-300"
-      : showReviewColors && isWrongSelected
-        ? "text-red-700 dark:text-red-300"
-        : "text-gray-800 dark:text-gray-100";
+  // ✅ Always hide letter for correct option (even before review)
+  const hideLetter = isSelected;
+
+  // --------------------
+  // Styling
+  // --------------------
+  if (showReviewColors) {
+    // Review: correct green, wrong selected red
+    if (isCorrectOption) {
+      ring = "ring-2 ring-green-500";
+      bg = "bg-green-100 dark:bg-green-950/30";
+      text = "text-green-700 dark:text-green-300";
+      dotCls = "h-2.5 w-2.5 rounded-full bg-green-500";
+    } else if (isWrongSelected) {
+      ring = "ring-2 ring-red-500";
+      bg = "bg-red-100 dark:bg-red-950/30";
+      text = "text-red-700 dark:text-red-300";
+      dotCls = "h-2.5 w-2.5 rounded-full bg-red-500";
+    } else if (isSelected) {
+      // (optional) if user selected some other option in review (not wrongSelected),
+      // keep it black dot (usually won't happen because wrongSelected covers it)
+      ring = "ring-2 ring-black";
+      bg = "bg-white dark:bg-gray-950";
+      dotCls = "h-2.5 w-2.5 rounded-full bg-black";
+    }
+  } else {
+    // Normal mode: only selected shows black dot
+    if (isSelected) {
+      ring = "ring-2 ring-black";
+      bg = "bg-white dark:bg-gray-950";
+      dotCls = "h-2.5 w-2.5 rounded-full bg-black";
+    } else {
+      // not selected => no dot
+      dotCls = "h-2.5 w-2.5 rounded-full bg-transparent";
+    }
+  }
+
+  // ✅ What to show inside the bubble
+  // - If hideLetter: show dot ONLY when it should be visible
+  //   - before review: only selected shows dot
+  //   - in review: correct/wrong show colored dot
+  // - Otherwise show letter
+  const showDot = showReviewColors
+    ? isCorrectOption || isWrongSelected || isSelected
+    : isSelected;
 
   return (
     <label
@@ -284,21 +321,16 @@ function OptionRow({
           ? "cursor-not-allowed opacity-95"
           : "cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900"
       }`}
-      // ✅ stops browser from focusing the hidden radio and jumping scroll
       onMouseDown={(e) => e.preventDefault()}
-      // ✅ we control selection ourselves
       onClick={() => {
         if (!disabled) onSelect();
       }}
     >
-      <span
-        className={`mt-1 h-5 w-5 rounded-full flex items-center justify-center ${ring}`}
-        aria-hidden="true"
-      >
-        <span className={`h-3 w-3 rounded-full ${dot}`} />
+      {/* Radio bubble */}
+      <span className={`${base} ${ring} ${bg}`} aria-hidden="true">
+        {hideLetter ? showDot ? <span className={dotCls} /> : null : letter}
       </span>
 
-      {/* Keep input for accessibility, but don't let it drive scroll */}
       <input
         type="radio"
         className="absolute opacity-0 pointer-events-none"
@@ -308,11 +340,10 @@ function OptionRow({
         tabIndex={-1}
       />
 
-      <span className={`leading-6 ${textColor}`}>{label}</span>
+      <span className={`leading-6 ${text}`}>{label}</span>
     </label>
   );
 }
-
 export default function TakeExam() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -608,7 +639,6 @@ export default function TakeExam() {
   const ss = String(timeLeft % 60).padStart(2, "0");
 
   return (
-    // ✅ normal page wrapper (no internal scrolling)
     <div className="p-6 pb-24 max-w-3xl mx-auto">
       <IntroModal
         open={introOpen && !submitted}
@@ -685,20 +715,20 @@ export default function TakeExam() {
                   const isSelected = userAns === i;
                   const isCorrectOption = i === q.correctAnswer;
 
-                  const isWrongSelected =
-                    submitted && isSelected && !isCorrectOption;
-
                   const showReviewColors = submitted && reviewMode;
+                  const isWrongSelected =
+                    showReviewColors && isSelected && !isCorrectOption;
 
                   const disabled = !examStarted || submitted;
 
                   return (
                     <OptionRow
                       key={i}
+                      letter={banglaOptions[i]}
                       label={opt}
                       isSelected={isSelected}
-                      isCorrectOption={showReviewColors && isCorrectOption}
-                      isWrongSelected={showReviewColors && isWrongSelected}
+                      isCorrectOption={isCorrectOption} // ✅ always pass
+                      isWrongSelected={isWrongSelected}
                       disabled={disabled}
                       showReviewColors={showReviewColors}
                       onSelect={() => handleChange(q._id, i)}
