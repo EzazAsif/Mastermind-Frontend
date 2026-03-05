@@ -601,7 +601,7 @@ export default function Student({ onOpenAuth, setRoute }) {
             onClick={() => setRoute("takeExam")}
             className="rounded-xl bg-[var(--mm-teal)] text-white py-2 text-sm font-medium shadow-soft hover:bg-[var(--mm-teal-dark)] active:translate-y-px transition"
           >
-            Continue MCQs
+            Take Exam
           </button>
         </div>
       </motion.section>
