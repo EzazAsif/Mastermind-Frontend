@@ -263,11 +263,11 @@ export default function StudentWelcome({ student, onOpenAuth }) {
           <div className="flex-1">
             {isGuest ? (
               <>
-                <p className="text-xs text-gray-600 dark:text-gray-300">
-                  Login now to unlock full ICT power
+                <p className="text-lg text-gray-600 dark:text-gray-300 font-semibold">
+                  Unlock full ICT power
                 </p>
 
-                <h2 className="text-lg font-semibold">
+                <h2 className="text-xs ">
                   Track progress, access premium notes, take exams
                 </h2>
               </>

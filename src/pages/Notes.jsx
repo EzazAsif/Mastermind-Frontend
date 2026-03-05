@@ -211,7 +211,7 @@ export default function Notes({ openPdf, currentUser, locale }) {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.25 }}
-                className={`rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5 shadow-soft transition group ${
+                className={`rounded-2xl p-[1px] bg-gradient-to-r from-teal-500 to-orange-500 ${
                   hasUrl
                     ? "hover:shadow-lg cursor-pointer"
                     : "opacity-80 cursor-not-allowed"
@@ -225,36 +225,38 @@ export default function Notes({ openPdf, currentUser, locale }) {
                       : "Open (Premium)"
                 }
               >
-                <div className="flex items-start justify-between">
-                  <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
-                    📓
+                <div className="rounded-2xl bg-white dark:bg-gray-900 p-5 shadow-soft transition group">
+                  <div className="flex items-start justify-between">
+                    <div className="p-2 rounded-xl bg-[var(--mm-teal)]/10 text-[var(--mm-teal)] text-lg">
+                      📓
+                    </div>
+
+                    {/* Free/Premium label */}
+                    <div
+                      className={`text-xs font-medium px-2 py-1 rounded-full ${
+                        isFree
+                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                      }`}
+                    >
+                      {isFree ? "Free" : "Premium"}
+                    </div>
                   </div>
 
-                  {/* Free/Premium label */}
-                  <div
-                    className={`text-xs font-medium px-2 py-1 rounded-full ${
-                      isFree
-                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-                    }`}
-                  >
-                    {isFree ? "Free" : "Premium"}
-                  </div>
+                  <h3 className="mt-4 font-medium text-sm lg:text-base group-hover:text-[var(--mm-teal)] transition">
+                    {note.noteName || note.originalName || "Untitled"}
+                  </h3>
+
+                  {!isFree ? (
+                    <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                      {!currentUser
+                        ? "Tap to log in"
+                        : !isValidated
+                          ? "Tap to validate"
+                          : "Tap to open"}
+                    </p>
+                  ) : null}
                 </div>
-
-                <h3 className="mt-4 font-medium text-sm lg:text-base group-hover:text-[var(--mm-teal)] transition">
-                  {note.noteName || note.originalName || "Untitled"}
-                </h3>
-
-                {!isFree ? (
-                  <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-                    {!currentUser
-                      ? "Tap to log in"
-                      : !isValidated
-                        ? "Tap to validate"
-                        : "Tap to open"}
-                  </p>
-                ) : null}
               </motion.div>
             );
           })}
