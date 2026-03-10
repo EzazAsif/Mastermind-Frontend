@@ -6,7 +6,7 @@ import ValidationModal from "../components/ValidationModal.jsx";
 import AuthModal from "../components/AuthModal.jsx";
 
 /* ===========================================
-   Stable Key Helpers (no randomness)
+   Stable Key Helpers
 =========================================== */
 const banglaOptions = ["ক", "খ", "গ", "ঘ"];
 
@@ -45,11 +45,9 @@ function stableIdFromQuestion(q) {
 }
 
 /* ===========================================
-   Question selection
-   Rule:
-   1. Keep total only 25
-   2. Set questions first
-   3. Then other questions fill remaining slots
+   Pick 25 questions
+   - set questions first
+   - others fill remaining slots
 =========================================== */
 function pickExamQuestions(rawQuestions, totalNeeded = 25) {
   const normalized = (rawQuestions || []).map((q, index) => ({
@@ -58,13 +56,13 @@ function pickExamQuestions(rawQuestions, totalNeeded = 25) {
     __originalIndex: index,
   }));
 
-  // remove duplicate questions first
   const uniqueMap = new Map();
   for (const q of normalized) {
     if (!uniqueMap.has(q.__stableId)) {
       uniqueMap.set(q.__stableId, q);
     }
   }
+
   const uniqueQuestions = Array.from(uniqueMap.values());
 
   const setQuestions = uniqueQuestions
@@ -98,11 +96,9 @@ function pickExamQuestions(rawQuestions, totalNeeded = 25) {
     }));
 }
 
-/** exam_taken formats supported:
- *  - {"taken": true}
- *  - true
- *  - "true"
- */
+/* ===========================================
+   Exam taken helpers
+=========================================== */
 function readExamTaken(key) {
   try {
     const raw = localStorage.getItem(key);
@@ -127,7 +123,6 @@ function writeExamTaken(key) {
   }
 }
 
-// serverUser.is_validated can be true/false, 1/0, "true"/"false"
 function isUserValidated(serverUser) {
   const raw = serverUser?.is_validated;
   return raw === true || raw === 1 || raw === "true";
@@ -177,7 +172,6 @@ function ModalShell({
           </div>
 
           <div className="mt-5">{children}</div>
-
           <div className="mt-6 flex justify-end gap-2">{actions}</div>
         </div>
       </div>
@@ -217,7 +211,7 @@ function IntroModal({ open, totalQuestions, minutes, onOk }) {
         <button
           type="button"
           onClick={onOk}
-          className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+          className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold shadow-sm"
         >
           Start Exam
         </button>
@@ -405,6 +399,7 @@ export default function TakeExam() {
   const [uid, setUid] = useState(null);
 
   const [serverUser, setServerUser] = useState(null);
+  const [userExists, setUserExists] = useState(null); // null = checking, true/false = known
   const [userLoading, setUserLoading] = useState(false);
 
   const [loginOpen, setLoginOpen] = useState(false);
@@ -424,6 +419,7 @@ export default function TakeExam() {
     };
   }, []);
 
+  // auth state
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((u) => {
       setUid(u?.uid || null);
@@ -432,30 +428,49 @@ export default function TakeExam() {
     return unsub;
   }, []);
 
+  // fetch user by uid
   const fetchServerUser = async (uidToFetch) => {
     const res = await fetch(`${API_ORIGIN}/api/users/${uidToFetch}`);
-    if (!res.ok) throw new Error("Failed to fetch user");
-    return await res.json();
+
+    if (res.status === 404) {
+      return { exists: false, data: null };
+    }
+
+    if (!res.ok) {
+      throw new Error("Failed to fetch user");
+    }
+
+    const data = await res.json();
+    return { exists: true, data };
   };
 
+  // load user only when logged in
   useEffect(() => {
     if (!authReady) return;
 
     if (!uid) {
       setServerUser(null);
+      setUserExists(false);
       setUserLoading(false);
       return;
     }
 
     let cancelled = false;
     setUserLoading(true);
+    setUserExists(null);
 
     (async () => {
       try {
-        const data = await fetchServerUser(uid);
-        if (!cancelled) setServerUser(data);
+        const result = await fetchServerUser(uid);
+
+        if (cancelled) return;
+
+        setServerUser(result.data);
+        setUserExists(result.exists);
       } catch {
-        if (!cancelled) setServerUser(null);
+        if (cancelled) return;
+        setServerUser(null);
+        setUserExists(false);
       } finally {
         if (!cancelled) setUserLoading(false);
       }
@@ -466,41 +481,46 @@ export default function TakeExam() {
     };
   }, [authReady, uid]);
 
+  // local first-time / repeat exam logic stays same
   const examTaken = useMemo(() => readExamTaken(EXAM_TAKEN_KEY), [submitted]);
 
   const validatedReady = useMemo(() => {
-    if (!uid) return true;
-    return !userLoading;
-  }, [uid, userLoading]);
+    // first time => no need to wait for account validation
+    if (!examTaken) return true;
+
+    // repeat exam => need auth/user check
+    if (!authReady) return false;
+    if (!uid) return true; // login modal can show now
+    return !userLoading && userExists !== null;
+  }, [examTaken, authReady, uid, userLoading, userExists]);
 
   const validated = useMemo(() => {
     if (!uid) return false;
-    if (!validatedReady) return false;
+    if (!userExists) return false;
     return isUserValidated(serverUser);
-  }, [uid, validatedReady, serverUser]);
+  }, [uid, userExists, serverUser]);
 
-  const canTakeExam = validated || !examTaken || submitted;
-  const shouldBlock = examTaken && !validated && !submitted && validatedReady;
+  // first time exam stays open
+  // repeat exam only if validated
+  const canTakeExam = !examTaken || submitted || (userExists && validated);
+
+  const shouldShowLoginModal =
+    examTaken && !submitted && validatedReady && (!uid || userExists === false);
+
+  const shouldShowValidationModal =
+    examTaken &&
+    !submitted &&
+    validatedReady &&
+    uid &&
+    userExists === true &&
+    !validated;
 
   useEffect(() => {
-    if (!shouldBlock) {
-      setShowValidationModal(false);
-      setLoginOpen(false);
-      return;
-    }
+    setLoginOpen(shouldShowLoginModal);
+    setShowValidationModal(shouldShowValidationModal);
+  }, [shouldShowLoginModal, shouldShowValidationModal]);
 
-    if (!uid) {
-      setLoginOpen(true);
-      setShowValidationModal(false);
-      return;
-    }
-
-    if (!validatedReady) return;
-
-    setShowValidationModal(true);
-    setLoginOpen(false);
-  }, [shouldBlock, uid, validatedReady]);
-
+  // fetch questions only if allowed
   useEffect(() => {
     let cancelled = false;
 
@@ -521,7 +541,6 @@ export default function TakeExam() {
 
         if (!cancelled) {
           setQuestions(finalList);
-
           setAnswers({});
           setSubmitted(false);
           setCorrectCount(null);
@@ -544,14 +563,15 @@ export default function TakeExam() {
     };
   }, [API_ORIGIN, canTakeExam]);
 
+  // intro modal
   useEffect(() => {
     if (!questions.length) return;
     if (submitted) return;
     if (!canTakeExam) return;
-
     if (!examStarted) setIntroOpen(true);
   }, [questions.length, submitted, canTakeExam, examStarted]);
 
+  // timer
   useEffect(() => {
     if (!questions.length || submitted) return;
     if (!canTakeExam) return;
@@ -626,6 +646,7 @@ export default function TakeExam() {
     } catch {}
   };
 
+  // blocked state
   if (!canTakeExam) {
     return (
       <>
@@ -637,21 +658,34 @@ export default function TakeExam() {
           onSuccess={async () => {
             if (!uid) return;
             try {
-              const data = await fetchServerUser(uid);
-              setServerUser(data);
-            } catch {}
+              const result = await fetchServerUser(uid);
+              setServerUser(result.data);
+              setUserExists(result.exists);
+            } catch {
+              setServerUser(null);
+              setUserExists(false);
+            }
           }}
         />
 
         <div className="p-6 max-w-3xl mx-auto">
           <h2 className="text-2xl font-bold mb-2">Exam Locked</h2>
-          <p className="text-gray-600 dark:text-gray-300">
-            You already took the exam once. Subscribe (validate) to take
-            unlimited exams.
-          </p>
 
-          {uid && !validatedReady && (
-            <p className="mt-3 text-sm text-gray-500">Checking your account…</p>
+          {!examTaken ? (
+            <p className="text-gray-600 dark:text-gray-300">Loading exam...</p>
+          ) : !authReady || !validatedReady ? (
+            <p className="text-gray-600 dark:text-gray-300">
+              Checking your account…
+            </p>
+          ) : !uid || userExists === false ? (
+            <p className="text-gray-600 dark:text-gray-300">
+              Please log in to continue.
+            </p>
+          ) : (
+            <p className="text-gray-600 dark:text-gray-300">
+              You already took the exam once. Subscribe (validate) to take
+              unlimited exams.
+            </p>
           )}
         </div>
       </>
