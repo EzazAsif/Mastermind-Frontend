@@ -9,6 +9,7 @@ import AuthModal from "../components/AuthModal.jsx";
    Stable Key Helpers (no randomness)
 =========================================== */
 const banglaOptions = ["ক", "খ", "গ", "ঘ"];
+
 function hashString(s) {
   let h1 = 0xdeadbeef,
     h2 = 0x41c6ce57;
@@ -41,6 +42,60 @@ function stableIdFromQuestion(q) {
   });
 
   return `hash:${hashString(payload)}`;
+}
+
+/* ===========================================
+   Question selection
+   Rule:
+   1. Keep total only 25
+   2. Set questions first
+   3. Then other questions fill remaining slots
+=========================================== */
+function pickExamQuestions(rawQuestions, totalNeeded = 25) {
+  const normalized = (rawQuestions || []).map((q, index) => ({
+    ...q,
+    __stableId: stableIdFromQuestion(q),
+    __originalIndex: index,
+  }));
+
+  // remove duplicate questions first
+  const uniqueMap = new Map();
+  for (const q of normalized) {
+    if (!uniqueMap.has(q.__stableId)) {
+      uniqueMap.set(q.__stableId, q);
+    }
+  }
+  const uniqueQuestions = Array.from(uniqueMap.values());
+
+  const setQuestions = uniqueQuestions
+    .filter((q) => q?.setId != null)
+    .sort((a, b) => {
+      const setCmp = String(a.setId).localeCompare(String(b.setId));
+      if (setCmp !== 0) return setCmp;
+
+      const aOrder = Number.isFinite(a?.setOrder) ? a.setOrder : 999999;
+      const bOrder = Number.isFinite(b?.setOrder) ? b.setOrder : 999999;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+
+      return a.__originalIndex - b.__originalIndex;
+    });
+
+  const otherQuestions = uniqueQuestions
+    .filter((q) => q?.setId == null)
+    .sort((a, b) => a.__originalIndex - b.__originalIndex);
+
+  const picked = [...setQuestions];
+
+  if (picked.length < totalNeeded) {
+    picked.push(...otherQuestions.slice(0, totalNeeded - picked.length));
+  }
+
+  return picked
+    .slice(0, totalNeeded)
+    .map(({ __stableId, __originalIndex, ...q }) => ({
+      ...q,
+      _id: __stableId,
+    }));
 }
 
 /** exam_taken formats supported:
@@ -94,7 +149,6 @@ function ModalShell({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-      {/* backdrop */}
       <button
         type="button"
         className="absolute inset-0 bg-black/55 backdrop-blur-[2px]"
@@ -102,7 +156,6 @@ function ModalShell({
         onClick={onClose}
       />
 
-      {/* modal card */}
       <div className="relative w-full max-w-md rounded-3xl bg-white dark:bg-gray-950 border border-gray-200/70 dark:border-gray-800 shadow-2xl overflow-hidden">
         <div className="h-1.5 w-full bg-gradient-to-r from-teal-500 to-orange-500" />
         <div className="p-6">
@@ -244,10 +297,6 @@ function ResultModal({
 
 /* ===========================================
    Option row
-   - Normal: selected => BLUE
-   - Review: correct option => GREEN (always)
-            wrong selected => RED
-   - No text inside radio
 =========================================== */
 function OptionRow({
   label,
@@ -267,14 +316,9 @@ function OptionRow({
   let text = "text-gray-800 dark:text-gray-100";
   let dotCls = "h-2.5 w-2.5 rounded-full bg-transparent";
 
-  // ✅ Always hide letter for correct option (even before review)
   const hideLetter = isSelected;
 
-  // --------------------
-  // Styling
-  // --------------------
   if (showReviewColors) {
-    // Review: correct green, wrong selected red
     if (isCorrectOption) {
       ring = "ring-2 ring-green-500";
       bg = "bg-green-100 dark:bg-green-950/30";
@@ -286,29 +330,20 @@ function OptionRow({
       text = "text-red-700 dark:text-red-300";
       dotCls = "h-2.5 w-2.5 rounded-full bg-red-500";
     } else if (isSelected) {
-      // (optional) if user selected some other option in review (not wrongSelected),
-      // keep it black dot (usually won't happen because wrongSelected covers it)
       ring = "ring-2 ring-black";
       bg = "bg-white dark:bg-gray-950";
       dotCls = "h-2.5 w-2.5 rounded-full bg-black";
     }
   } else {
-    // Normal mode: only selected shows black dot
     if (isSelected) {
       ring = "ring-2 ring-black";
       bg = "bg-white dark:bg-gray-950";
       dotCls = "h-2.5 w-2.5 rounded-full bg-black";
     } else {
-      // not selected => no dot
       dotCls = "h-2.5 w-2.5 rounded-full bg-transparent";
     }
   }
 
-  // ✅ What to show inside the bubble
-  // - If hideLetter: show dot ONLY when it should be visible
-  //   - before review: only selected shows dot
-  //   - in review: correct/wrong show colored dot
-  // - Otherwise show letter
   const showDot = showReviewColors
     ? isCorrectOption || isWrongSelected || isSelected
     : isSelected;
@@ -325,7 +360,6 @@ function OptionRow({
         if (!disabled) onSelect();
       }}
     >
-      {/* Radio bubble */}
       <span className={`${base} ${ring} ${bg}`} aria-hidden="true">
         {hideLetter ? showDot ? <span className={dotCls} /> : null : letter}
       </span>
@@ -343,6 +377,7 @@ function OptionRow({
     </label>
   );
 }
+
 export default function TakeExam() {
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
@@ -379,8 +414,8 @@ export default function TakeExam() {
 
   const API_ORIGIN = "https://ugliest-hannie-ezaz-307892de.koyeb.app";
   const EXAM_TAKEN_KEY = "exam_taken";
+  const TOTAL_QUESTIONS = 25;
 
-  // OPTIONAL: helpful if some page set body overflow hidden; restores normal scrolling
   useEffect(() => {
     const prev = document.body.style.overflow;
     if (prev === "hidden") document.body.style.overflow = "";
@@ -389,7 +424,6 @@ export default function TakeExam() {
     };
   }, []);
 
-  // ---- Auth: optional (exam can run without login) ----
   useEffect(() => {
     const unsub = auth.onAuthStateChanged((u) => {
       setUid(u?.uid || null);
@@ -398,7 +432,6 @@ export default function TakeExam() {
     return unsub;
   }, []);
 
-  // ---- Fetch server user ONLY if logged in ----
   const fetchServerUser = async (uidToFetch) => {
     const res = await fetch(`${API_ORIGIN}/api/users/${uidToFetch}`);
     if (!res.ok) throw new Error("Failed to fetch user");
@@ -433,7 +466,6 @@ export default function TakeExam() {
     };
   }, [authReady, uid]);
 
-  // ---- Derived rules ----
   const examTaken = useMemo(() => readExamTaken(EXAM_TAKEN_KEY), [submitted]);
 
   const validatedReady = useMemo(() => {
@@ -450,7 +482,6 @@ export default function TakeExam() {
   const canTakeExam = validated || !examTaken || submitted;
   const shouldBlock = examTaken && !validated && !submitted && validatedReady;
 
-  // ---- Modal behavior when blocked ----
   useEffect(() => {
     if (!shouldBlock) {
       setShowValidationModal(false);
@@ -470,7 +501,6 @@ export default function TakeExam() {
     setLoginOpen(false);
   }, [shouldBlock, uid, validatedReady]);
 
-  // ---- Fetch questions if allowed (no need for login) ----
   useEffect(() => {
     let cancelled = false;
 
@@ -479,18 +509,19 @@ export default function TakeExam() {
 
       try {
         const assembled = await axios.get(`${API_ORIGIN}/exams/assembled`, {
-          params: { base: 25, max: 100, absoluteImages: true },
+          params: {
+            base: TOTAL_QUESTIONS,
+            max: 100,
+            absoluteImages: true,
+          },
         });
 
-        const list = (assembled.data?.questions || []).map((q) => ({
-          ...q,
-          _id: stableIdFromQuestion(q),
-        }));
+        const rawList = assembled.data?.questions || [];
+        const finalList = pickExamQuestions(rawList, TOTAL_QUESTIONS);
 
         if (!cancelled) {
-          setQuestions(list);
+          setQuestions(finalList);
 
-          // reset exam session state when new questions load
           setAnswers({});
           setSubmitted(false);
           setCorrectCount(null);
@@ -513,7 +544,6 @@ export default function TakeExam() {
     };
   }, [API_ORIGIN, canTakeExam]);
 
-  // ---- Show intro popup BEFORE starting (only once per load) ----
   useEffect(() => {
     if (!questions.length) return;
     if (submitted) return;
@@ -522,7 +552,6 @@ export default function TakeExam() {
     if (!examStarted) setIntroOpen(true);
   }, [questions.length, submitted, canTakeExam, examStarted]);
 
-  // ---- Timer starts ONLY after intro OK ----
   useEffect(() => {
     if (!questions.length || submitted) return;
     if (!canTakeExam) return;
@@ -597,9 +626,6 @@ export default function TakeExam() {
     } catch {}
   };
 
-  // -----------------------
-  // UI
-  // -----------------------
   if (!canTakeExam) {
     return (
       <>
@@ -702,6 +728,20 @@ export default function TakeExam() {
               key={q._id}
               className="mb-6 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4 shadow-sm"
             >
+              {q.image && (
+                <div className="mb-4">
+                  <img
+                    src={String(q.image).replace(/^"|"$/g, "")}
+                    alt={`Question ${idx + 1}`}
+                    className="max-w-full rounded-xl border border-gray-200 dark:border-gray-800"
+                    onError={(e) => {
+                      console.error("Failed to load image:", q.image);
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                </div>
+              )}
+
               <div
                 className="font-semibold mb-3 text-gray-900 dark:text-gray-50"
                 style={{ whiteSpace: "pre-line" }}
@@ -726,7 +766,7 @@ export default function TakeExam() {
                       letter={banglaOptions[i]}
                       label={opt}
                       isSelected={isSelected}
-                      isCorrectOption={isCorrectOption} // ✅ always pass
+                      isCorrectOption={isCorrectOption}
                       isWrongSelected={isWrongSelected}
                       disabled={disabled}
                       showReviewColors={showReviewColors}
