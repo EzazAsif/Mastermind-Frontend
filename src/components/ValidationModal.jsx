@@ -57,9 +57,9 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
         <div className="flex flex-col items-center gap-2 mb-4">
           <img src="/bkash-logo.png" alt="bKash" className="h-10" />
           <p className="text-sm text-gray-600 dark:text-gray-300 text-center">
-            Send <span className="font-semibold">350৳</span> to:
+            Payment <span className="font-semibold">350৳</span> to:
           </p>
-          <p className="text-pink-600 font-bold text-lg">01711059617</p>
+          <p className="text-pink-600 font-bold text-lg">01611059617</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
