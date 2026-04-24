@@ -27,6 +27,11 @@ import AuthModal from "./components/AuthModal.jsx";
 import { auth } from "./lib/firebase";
 
 export default function App() {
+  useEffect(() => {
+    if (window.fbq) {
+      window.fbq('track', 'PageView');
+    }
+  }, []);
   const [route, setRoute] = useState("student");
   const [dark, setDark] = useState(false);
 
