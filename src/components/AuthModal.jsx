@@ -7,6 +7,7 @@ import {
   resetPassword,
   loginWithGoogle,
 } from "../lib/auth";
+import { use } from "react";
 
 export default function AuthModal({ open, mode = "login", onClose }) {
   const [tab, setTab] = useState(mode); // 'login' | 'register' | 'forgot'
@@ -30,9 +31,11 @@ export default function AuthModal({ open, mode = "login", onClose }) {
     try {
       if (tab === "login") {
         await loginWithEmail({ email, password });
+
         if (window.fbq) {
           fbq("track", "CompleteRegistration");
         }
+
         setMsg("Logged in!");
         setTimeout(() => onClose?.(), 800);
       } else if (tab === "register") {

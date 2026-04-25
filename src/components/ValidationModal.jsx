@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { getAuth } from "firebase/auth";
+import { use } from "react";
 
 export default function ValidationModal({ isOpen, onClose, onSuccess }) {
   const [transactionId, setTransactionId] = useState("");
@@ -32,9 +33,11 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
       );
 
       onSuccess(); // refresh header state
+
       if (window.fbq) {
         fbq("track", "Purchase");
       }
+
       onClose();
       window.location.assign("https://academia.ictmastermind.com");
     } catch (err) {

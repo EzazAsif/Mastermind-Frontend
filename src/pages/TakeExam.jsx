@@ -4,6 +4,7 @@ import axios from "axios";
 import { auth } from "../lib/firebase";
 import ValidationModal from "../components/ValidationModal.jsx";
 import AuthModal from "../components/AuthModal.jsx";
+import { use } from "react";
 
 /* ===========================================
    Stable Key Helpers
@@ -373,9 +374,12 @@ function OptionRow({
 }
 
 export default function TakeExam() {
-  if (window.fbq) {
-    fbq("trackCustom", "TakeExamPageView");
-  }
+  useEffect(() => {
+    if (window.fbq) {
+      fbq("trackCustom", "TakeExamPageView");
+    }
+  }, []);
+
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(900);
@@ -626,6 +630,7 @@ export default function TakeExam() {
 
   const handleSubmit = async () => {
     if (submitted) return;
+
     if (window.fbq) {
       fbq("trackCustom", "TakenExam");
     }
