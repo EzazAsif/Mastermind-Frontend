@@ -373,6 +373,9 @@ function OptionRow({
 }
 
 export default function TakeExam() {
+  if (window.fbq) {
+    fbq("trackCustom", "TakeExamPageView");
+  }
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [timeLeft, setTimeLeft] = useState(900);
@@ -623,7 +626,9 @@ export default function TakeExam() {
 
   const handleSubmit = async () => {
     if (submitted) return;
-
+    if (window.fbq) {
+      fbq("trackCustom", "TakenExam");
+    }
     clearInterval(timerRef.current);
 
     writeExamTaken(EXAM_TAKEN_KEY);

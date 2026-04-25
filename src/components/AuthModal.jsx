@@ -30,6 +30,9 @@ export default function AuthModal({ open, mode = "login", onClose }) {
     try {
       if (tab === "login") {
         await loginWithEmail({ email, password });
+        if (window.fbq) {
+          fbq("track", "CompleteRegistration");
+        }
         setMsg("Logged in!");
         setTimeout(() => onClose?.(), 800);
       } else if (tab === "register") {
@@ -68,6 +71,9 @@ export default function AuthModal({ open, mode = "login", onClose }) {
     try {
       setPending(true);
       await loginWithGoogle();
+      if (window.fbq) {
+        fbq("track", "CompleteRegistration");
+      }
       setMsg("Logged in with Google!");
       setTimeout(() => onClose?.(), 800);
     } catch (err) {

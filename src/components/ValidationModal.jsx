@@ -32,6 +32,9 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
       );
 
       onSuccess(); // refresh header state
+      if (window.fbq) {
+        fbq("track", "Purchase");
+      }
       onClose();
       window.location.assign("https://academia.ictmastermind.com");
     } catch (err) {

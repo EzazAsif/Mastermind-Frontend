@@ -22,6 +22,9 @@ import "react-pdf/dist/esm/Page/AnnotationLayer.css";
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 export default function ViewPdf({ fileName, onBack }) {
+  if (window.fbq) {
+    fbq("track", "ViewContent");
+  }
   const fileUrl = fileName;
 
   const [numPages, setNumPages] = useState(null);
