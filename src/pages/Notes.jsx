@@ -168,7 +168,7 @@ export default function Notes({ openPdf, currentUser, locale }) {
       // ✅ Free opens always
       if (isFree) {
         fbq("trackCustom", "OpenedFreeNote");
-        fbq("trackCustom", `Opened${note.noteName || "Note"}`);
+        fbq("trackCustom", `Opened: ${note.noteName || "Note"}`);
         openPdf?.(note.downloadURL);
         return;
       }
@@ -188,7 +188,7 @@ export default function Notes({ openPdf, currentUser, locale }) {
 
       // validated
       fbq("trackCustom", "OpenedPremiumNote");
-      fbq("trackCustom", `Opened${note.noteName || "Note"}`);
+      fbq("trackCustom", `Opened: ${note.noteName || "Note"}`);
       openPdf?.(note.downloadURL);
     },
     [openPdf, currentUser, isValidated],
