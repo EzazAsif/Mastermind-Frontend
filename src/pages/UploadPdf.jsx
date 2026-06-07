@@ -57,7 +57,7 @@ export default function UploadPdf({ user }) {
       if (user?.uid) formData.append("uploadedBy", user.uid);
 
       const res = await fetch(
-        "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/upload",
+        "https://api-magxbk6vsa-uc.a.run.app/api/upload",
         {
           method: "POST",
           body: formData,

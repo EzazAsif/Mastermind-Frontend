@@ -16,7 +16,7 @@ export default function AddAnnouncement() {
     try {
       setLoading(true);
       await axios.post(
-        "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/announcements",
+        "https://api-magxbk6vsa-uc.a.run.app/api/announcements",
         { title, content },
       );
       alert("Announcement added!");

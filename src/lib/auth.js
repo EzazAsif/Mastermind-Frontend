@@ -75,8 +75,7 @@ async function trackLogin(user) {
 /** =========================
  *  Backend URL for registering user
  * ========================== */
-const BACKEND_REGISTER_URL =
-  "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/register";
+const BACKEND_REGISTER_URL = "https://api-magxbk6vsa-uc.a.run.app/api/register";
 
 /** =========================
  *  Register with Email & Password

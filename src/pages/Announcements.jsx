@@ -125,8 +125,7 @@ export default function Announcements({ uid, locale }) {
   const DEBUG = true;
 
   const API_BASE =
-    import.meta.env.VITE_API_URL ||
-    "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+    import.meta.env.VITE_API_URL || "https://api-magxbk6vsa-uc.a.run.app";
 
   // Load lastVisitedAt from localStorage & stamp this visit
   useEffect(() => {

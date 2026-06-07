@@ -29,7 +29,7 @@ import { auth } from "./lib/firebase";
 export default function App() {
   useEffect(() => {
     if (window.fbq) {
-      window.fbq('track', 'PageView');
+      window.fbq("track", "PageView");
     }
   }, []);
   const [route, setRoute] = useState("student");
@@ -69,7 +69,7 @@ export default function App() {
 
       try {
         const res = await fetch(
-          `https://ugliest-hannie-ezaz-307892de.koyeb.app/api/users/${user.uid}`,
+          `https://api-magxbk6vsa-uc.a.run.app/api/users/${user.uid}`,
         );
         if (!res.ok) throw new Error("Failed to fetch user from server");
         const data = await res.json();
@@ -193,7 +193,30 @@ export default function App() {
   const CurrentPage = useMemo(() => PAGES[route], [PAGES, route]);
 
   if (loadingUser)
-    return <p className="text-center mt-4">Loading user information...</p>;
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <img
+          src="/ictbanner.jpg"
+          alt="Loading"
+          className="w-64 md:w-96 loading-banner"
+        />
+
+        <style>{`
+        .loading-banner {
+          animation: fadeInOut 2s ease-in-out infinite;
+        }
+
+        @keyframes fadeInOut {
+          0%, 100% {
+            opacity: 0.3;
+          }
+          50% {
+            opacity: 1;
+          }
+        }
+      `}</style>
+      </div>
+    );
 
   return (
     <div

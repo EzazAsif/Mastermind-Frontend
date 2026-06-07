@@ -6,8 +6,7 @@ export function getPublicUrl(img) {
     return img;
   }
   const API_BASE =
-    import.meta.env.VITE_API_BASE ||
-    "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+    import.meta.env.VITE_API_BASE || "https://api-magxbk6vsa-uc.a.run.app";
   if (img.startsWith("/")) return `${API_BASE}${img}`;
   return `${API_BASE}/${img}`;
 }

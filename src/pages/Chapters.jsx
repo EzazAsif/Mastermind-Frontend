@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import QuestionModal from "../components/QuestionModal";
-import { getPublicUrl } from "../utils/url"; // resolves /uploads/... to https://ugliest-hannie-ezaz-307892de.koyeb.app/uploads/...
+import { getPublicUrl } from "../utils/url"; // resolves /uploads/... to https://api-magxbk6vsa-uc.a.run.app/uploads/...
 
 /* =========================
    SMALL REUSABLE SPINNER
@@ -173,9 +173,9 @@ export default function Chapters() {
     try {
       setLoadingChapters(true);
 
-      const raw = await fetch(
-        "https://ugliest-hannie-ezaz-307892de.koyeb.app/exams",
-      ).then((res) => res.json());
+      const raw = await fetch("https://api-magxbk6vsa-uc.a.run.app/exams").then(
+        (res) => res.json(),
+      );
 
       const data = (Array.isArray(raw) ? raw : [])
         .map(normalizeChapter)
@@ -224,7 +224,7 @@ export default function Chapters() {
 
       if (editingChapter?.id) {
         updatedChapter = await fetch(
-          `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${editingChapter.id}`,
+          `https://api-magxbk6vsa-uc.a.run.app/exams/${editingChapter.id}`,
           {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -242,7 +242,7 @@ export default function Chapters() {
           setSelectedChapter(normalized);
       } else {
         updatedChapter = await fetch(
-          "https://ugliest-hannie-ezaz-307892de.koyeb.app/exams",
+          "https://api-magxbk6vsa-uc.a.run.app/exams",
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -270,12 +270,9 @@ export default function Chapters() {
   const deleteChapter = async (id) => {
     if (!id) return;
     try {
-      await fetch(
-        `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${id}`,
-        {
-          method: "DELETE",
-        },
-      );
+      await fetch(`https://api-magxbk6vsa-uc.a.run.app/exams/${id}`, {
+        method: "DELETE",
+      });
       setChapters((prev) => prev.filter((c) => c.id !== id));
       if (selectedChapter?.id === id) setSelectedChapter(null);
     } catch (err) {
@@ -290,7 +287,7 @@ export default function Chapters() {
     if (!selectedChapter?.id || !questionId) return;
     try {
       const updated = await fetch(
-        `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${selectedChapter.id}/questions/${questionId}`,
+        `https://api-magxbk6vsa-uc.a.run.app/exams/${selectedChapter.id}/questions/${questionId}`,
         { method: "DELETE" },
       ).then((res) => res.json());
 

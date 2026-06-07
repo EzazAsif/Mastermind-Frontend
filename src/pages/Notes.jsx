@@ -73,8 +73,7 @@ export default function Notes({ openPdf, currentUser, locale }) {
   const [validationOpen, setValidationOpen] = useState(false);
 
   const API_BASE =
-    import.meta.env.VITE_API_URL ||
-    "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+    import.meta.env.VITE_API_URL || "https://api-magxbk6vsa-uc.a.run.app";
 
   // Fetch notes (must return both free + premium)
   const fetchNotes = useCallback(async () => {

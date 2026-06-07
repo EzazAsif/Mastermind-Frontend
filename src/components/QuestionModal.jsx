@@ -222,8 +222,8 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
         formData.set("image", imageFile, imageFile.name);
 
         const url = isEdit
-          ? `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${exam._id}/questions/${existingQuestion._id}/upload`
-          : `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${exam._id}/questions/upload`;
+          ? `https://api-magxbk6vsa-uc.a.run.app/exams/${exam._id}/questions/${existingQuestion._id}/upload`
+          : `https://api-magxbk6vsa-uc.a.run.app/exams/${exam._id}/questions/upload`;
 
         updatedExam = await send(url, {
           method: isEdit ? "PUT" : "POST",
@@ -237,8 +237,8 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
         };
 
         const url = isEdit
-          ? `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${exam._id}/questions/${existingQuestion._id}`
-          : `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${exam._id}/questions`;
+          ? `https://api-magxbk6vsa-uc.a.run.app/exams/${exam._id}/questions/${existingQuestion._id}`
+          : `https://api-magxbk6vsa-uc.a.run.app/exams/${exam._id}/questions`;
 
         updatedExam = await send(url, {
           method: isEdit ? "PUT" : "POST",
@@ -253,8 +253,8 @@ export default function QuestionModal({ exam, existingQuestion, onSuccess }) {
         };
 
         const url = isEdit
-          ? `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${exam._id}/questions/${existingQuestion._id}`
-          : `https://ugliest-hannie-ezaz-307892de.koyeb.app/exams/${exam._id}/questions`;
+          ? `https://api-magxbk6vsa-uc.a.run.app/exams/${exam._id}/questions/${existingQuestion._id}`
+          : `https://api-magxbk6vsa-uc.a.run.app/exams/${exam._id}/questions`;
 
         updatedExam = await send(url, {
           method: isEdit ? "PUT" : "POST",

@@ -24,13 +24,10 @@ export default function ValidationModal({ isOpen, onClose, onSuccess }) {
 
       const user = auth.currentUser;
 
-      await axios.post(
-        "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests",
-        {
-          uid: user.uid,
-          transactionId,
-        },
-      );
+      await axios.post("https://api-magxbk6vsa-uc.a.run.app/api/requests", {
+        uid: user.uid,
+        transactionId,
+      });
 
       onSuccess(); // refresh header state
 

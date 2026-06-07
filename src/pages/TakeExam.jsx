@@ -414,7 +414,7 @@ export default function TakeExam() {
 
   const timerRef = useRef();
 
-  const API_ORIGIN = "https://ugliest-hannie-ezaz-307892de.koyeb.app";
+  const API_ORIGIN = "https://api-magxbk6vsa-uc.a.run.app";
   const EXAM_TAKEN_KEY = "exam_taken";
   const TOTAL_QUESTIONS = 25;
 

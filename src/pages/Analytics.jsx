@@ -36,7 +36,7 @@ export default function Analytics() {
 
         // 1) Users & subscribed from backend
         const usersRes = await axios.get(
-          "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/users",
+          "https://api-magxbk6vsa-uc.a.run.app/api/users",
           {
             // If your backend expects auth, include it:
             // headers: { Authorization: `Bearer ${await user.getIdToken()}` }

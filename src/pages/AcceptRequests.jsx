@@ -83,7 +83,7 @@ export default function AcceptRequests() {
     try {
       setLoadingList(true);
       const res = await axios.get(
-        "https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests",
+        "https://api-magxbk6vsa-uc.a.run.app/api/requests",
       );
       setRequests(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
@@ -112,7 +112,7 @@ export default function AcceptRequests() {
       // setRequests((prev) => prev.filter((r) => (r._id ?? stableIdFromRequest(r)) !== id));
 
       await axios.put(
-        `https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests/approve/${id}`,
+        `https://api-magxbk6vsa-uc.a.run.app/api/requests/approve/${id}`,
       );
       await fetchRequests();
     } catch (err) {
@@ -131,7 +131,7 @@ export default function AcceptRequests() {
       // setRequests((prev) => prev.filter((r) => (r._id ?? stableIdFromRequest(r)) !== id));
 
       await axios.put(
-        `https://ugliest-hannie-ezaz-307892de.koyeb.app/api/requests/reject/${id}`,
+        `https://api-magxbk6vsa-uc.a.run.app/api/requests/reject/${id}`,
       );
       await fetchRequests();
     } catch (err) {
